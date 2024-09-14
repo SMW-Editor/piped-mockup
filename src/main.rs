@@ -1,47 +1,73 @@
-#![cfg_attr(not(debug_assertions), windows_subsystem = "windows")] // hide console window on Windows in release
+use iced::{
+    executor,
+    widget::{button, column, container, image},
+    window, Alignment, Application, Color, Command, Element, Length, Settings, Theme,
+};
 
-use eframe::egui;
-
-fn main() -> eframe::Result {
-    let options = eframe::NativeOptions {
-        viewport: egui::ViewportBuilder::default().with_inner_size([320.0, 240.0]),
+fn main() -> iced::Result {
+    App::run(Settings {
+        antialiasing: true,
+        window: window::Settings {
+            position: window::Position::Centered,
+            ..Default::default()
+        },
         ..Default::default()
-    };
-    eframe::run_native(
-        "Piped Mockup",
-        options,
-        Box::new(|_| Ok(Box::<Model>::default())),
-    )
+    })
 }
 
-struct Model {
-    name: String,
-    age: u32,
+struct App {
+    large: bool,
 }
 
-impl Default for Model {
-    fn default() -> Self {
-        Self {
-            name: "Pixel".to_owned(),
-            age: 42,
+#[derive(Debug, Clone, Copy)]
+enum Message {
+    ToggleLarge,
+}
+
+impl Application for App {
+    type Executor = executor::Default;
+    type Flags = ();
+    type Message = Message;
+    type Theme = Theme;
+
+    fn new(_: Self::Flags) -> (Self, Command<Message>) {
+        (Self { large: false }, Command::none())
+    }
+    fn update(&mut self, message: Message) -> Command<Message> {
+        match message {
+            Message::ToggleLarge => {
+                self.large = !self.large;
+                Command::none()
+            }
         }
     }
-}
 
-impl eframe::App for Model {
-    fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
-        egui::CentralPanel::default().show(ctx, |ui| {
-            ui.heading("My egui Application");
-            ui.horizontal(|ui| {
-                let name_label = ui.label("Your name: ");
-                ui.text_edit_singleline(&mut self.name)
-                    .labelled_by(name_label.id);
-            });
-            ui.add(egui::Slider::new(&mut self.age, 0..=120).text("age"));
-            if ui.button("Increment").clicked() {
-                self.age += 1;
-            }
-            ui.label(format!("Hello '{}', age {}", self.name, self.age));
-        });
+    fn title(&self) -> String {
+        "Piped Mockup".into()
+    }
+    fn theme(&self) -> Theme {
+        Theme::Dark
+    }
+    fn view(&self) -> Element<Message> {
+        let element: Element<Message> = container(
+            column![
+                "Palette",
+                Element::from(
+                    image(format!("{}/assets/palette.png", env!("CARGO_MANIFEST_DIR")))
+                        .filter_method(image::FilterMethod::Nearest)
+                        .width(Length::Fill)
+                        .height(if self.large { 200 } else { 100 })
+                ),
+                button("Toggle Large").on_press(Message::ToggleLarge)
+            ]
+            .align_items(Alignment::Center)
+            .spacing(20),
+        )
+        .center_x()
+        .center_y()
+        .height(Length::Fill)
+        .width(Length::Fill)
+        .into();
+        element.explain(Color::BLACK)
     }
 }
