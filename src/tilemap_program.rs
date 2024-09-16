@@ -1,3 +1,5 @@
+use std::sync::Arc;
+
 use glam::Vec2;
 // We have to alias the shader element because it has the same name as the iced::widget::shader module, and the `self` syntax only imports the module.
 use iced::widget::shader as shader_element;
@@ -223,6 +225,11 @@ impl TilemapWithControls {
             tilemap_program: TilemapProgram::new(),
         }
     }
+    /** Tell the tilemap to show these bytes. */
+    pub fn show(&mut self, tilemap_bytes: Option<Arc<Vec<u8>>>) {
+        self.tilemap_program.tilemap_bytes = tilemap_bytes;
+    }
+    /** This is where tilemap handles its own messages. */
     pub fn update(&mut self, message: Message) -> Command<Message> {
         match message {
             Message::UpdateMaxIterations(max_iter) => {
@@ -287,12 +294,14 @@ impl TilemapWithControls {
 }
 struct TilemapProgram {
     controls: Controls,
+    tilemap_bytes: Option<Arc<Vec<u8>>>,
 }
 
 impl TilemapProgram {
     fn new() -> Self {
         Self {
             controls: Controls::default(),
+            tilemap_bytes: None,
         }
     }
 }

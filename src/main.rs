@@ -24,6 +24,7 @@ fn main() -> iced::Result {
 struct App {
     large: bool,
     tilemap_with_controls: TilemapWithControls,
+    loaded_tilemap: Option<(PathBuf, Arc<Vec<u8>>)>,
 }
 
 #[allow(clippy::enum_variant_names)]
@@ -31,7 +32,7 @@ struct App {
 enum Message {
     ToggleLarge,
     TilemapMessage(tilemap_program::Message),
-    BinFileLoaded(Option<(PathBuf, Arc<Vec<u8>>)>),
+    TilemapLoaded(Option<(PathBuf, Arc<Vec<u8>>)>),
 }
 
 impl Application for App {
@@ -45,13 +46,14 @@ impl Application for App {
             App {
                 large: false,
                 tilemap_with_controls: TilemapWithControls::new(),
+                loaded_tilemap: None,
             },
             Command::perform(
                 load_file(PathBuf::from(format!(
                     "{}/assets/grass.bin",
                     env!("CARGO_MANIFEST_DIR")
                 ))),
-                Message::BinFileLoaded,
+                Message::TilemapLoaded,
             ),
         )
     }
@@ -65,8 +67,11 @@ impl Application for App {
                 self.tilemap_with_controls.update(m),
                 Message::TilemapMessage,
             ),
-            Message::BinFileLoaded(Some((path, bytes))) => {
+            Message::TilemapLoaded(Some((path, bytes))) => {
                 println!("loaded {path:?}, {:?} bytes", bytes.len());
+
+                self.loaded_tilemap = Some((path, bytes.clone()));
+                self.tilemap_with_controls.show(Some(bytes));
                 Command::none()
             }
             _ => Command::none(),
