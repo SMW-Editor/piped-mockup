@@ -22,23 +22,23 @@ pub struct Uniforms {
     max_iter: u32,
 }
 
-struct FragmentShaderPipeline {
+struct TilemapShaderPipeline {
     pipeline: wgpu::RenderPipeline,
     uniform_buffer: wgpu::Buffer,
     uniform_bind_group: wgpu::BindGroup,
 }
 
-impl FragmentShaderPipeline {
+impl TilemapShaderPipeline {
     fn new(device: &wgpu::Device, format: wgpu::TextureFormat) -> Self {
         let shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
-            label: Some("FragmentShaderPipeline shader"),
+            label: Some("TilemapShaderPipeline shader"),
             source: wgpu::ShaderSource::Wgsl(std::borrow::Cow::Borrowed(include_str!(
                 "tilemap_shader.wgsl"
             ))),
         });
 
         let pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
-            label: Some("FragmentShaderPipeline"),
+            label: Some("TilemapShaderPipeline"),
             layout: None,
             vertex: wgpu::VertexState {
                 module: &shader,
@@ -156,17 +156,17 @@ impl Default for Controls {
 }
 
 #[derive(Debug)]
-pub struct FragmentShaderPrimitive {
+pub struct TilemapPrimitive {
     controls: Controls,
 }
 
-impl FragmentShaderPrimitive {
+impl TilemapPrimitive {
     fn new(controls: Controls) -> Self {
         Self { controls }
     }
 }
 
-impl shader::Primitive for FragmentShaderPrimitive {
+impl shader::Primitive for TilemapPrimitive {
     fn prepare(
         &self,
         format: wgpu::TextureFormat,
@@ -177,11 +177,11 @@ impl shader::Primitive for FragmentShaderPrimitive {
         _scale_factor: f32,
         storage: &mut shader::Storage,
     ) {
-        if !storage.has::<FragmentShaderPipeline>() {
-            storage.store(FragmentShaderPipeline::new(device, format));
+        if !storage.has::<TilemapShaderPipeline>() {
+            storage.store(TilemapShaderPipeline::new(device, format));
         }
 
-        let pipeline = storage.get_mut::<FragmentShaderPipeline>().unwrap();
+        let pipeline = storage.get_mut::<TilemapShaderPipeline>().unwrap();
 
         pipeline.update(
             queue,
@@ -202,7 +202,7 @@ impl shader::Primitive for FragmentShaderPrimitive {
         viewport: Rectangle<u32>,
         encoder: &mut wgpu::CommandEncoder,
     ) {
-        let pipeline = storage.get::<FragmentShaderPipeline>().unwrap();
+        let pipeline = storage.get::<TilemapShaderPipeline>().unwrap();
         pipeline.render(target, encoder, viewport);
     }
 }
@@ -299,7 +299,7 @@ impl TilemapProgram {
 
 impl shader::Program<Message> for TilemapProgram {
     type State = MouseInteraction;
-    type Primitive = FragmentShaderPrimitive;
+    type Primitive = TilemapPrimitive;
 
     fn draw(
         &self,
@@ -307,7 +307,7 @@ impl shader::Program<Message> for TilemapProgram {
         _cursor: mouse::Cursor,
         _bounds: Rectangle,
     ) -> Self::Primitive {
-        FragmentShaderPrimitive::new(self.controls)
+        TilemapPrimitive::new(self.controls)
     }
 
     fn update(
