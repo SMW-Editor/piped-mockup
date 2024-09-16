@@ -33,6 +33,7 @@ enum Message {
     ToggleLarge,
     TilemapMessage(tilemap_program::Message),
     TilemapLoaded(Option<(PathBuf, Arc<Vec<u8>>)>),
+    SelectTilemap((PathBuf, Arc<Vec<u8>>)),
 }
 
 impl Application for App {
@@ -79,7 +80,10 @@ impl Application for App {
             Message::TilemapLoaded(Some((path, bytes))) => {
                 println!("loaded {path:?}, {:?} bytes", bytes.len());
                 self.loaded_tilemaps.push((path, bytes.clone()));
-                self.tilemap_with_controls.show(Some(bytes));
+                Command::none()
+            }
+            Message::SelectTilemap(tilemap) => {
+                self.tilemap_with_controls.show(Some(tilemap.1));
                 Command::none()
             }
             _ => Command::none(),
@@ -93,7 +97,7 @@ impl Application for App {
         Theme::Dark
     }
     fn view(&self) -> Element<Message> {
-        let element: Element<Message> = container(
+        container(
             column![
                 "Palette:",
                 Element::from(
@@ -103,6 +107,13 @@ impl Application for App {
                         .height(if self.large { 200 } else { 100 })
                 ),
                 button("Toggle Large").on_press(Message::ToggleLarge),
+                "Available Tilemaps:",
+                column(self.loaded_tilemaps.iter().map(|tilemap| {
+                    button(tilemap.0.file_name().unwrap().to_str().unwrap())
+                        .on_press(Message::SelectTilemap(tilemap.clone()))
+                        .into()
+                }))
+                .align_items(Alignment::Center),
                 "Tilemap:",
                 Element::map(self.tilemap_with_controls.view(), Message::TilemapMessage),
             ]
@@ -113,8 +124,7 @@ impl Application for App {
         .center_y()
         .height(Length::Fill)
         .width(Length::Fill)
-        .into();
-        element.explain(Color::BLACK)
+        .into()
     }
 }
 

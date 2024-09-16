@@ -227,6 +227,12 @@ impl TilemapWithControls {
     }
     /** Tell the tilemap to show these bytes. */
     pub fn show(&mut self, tilemap_bytes: Option<Arc<Vec<u8>>>) {
+        if let Some(bytes) = &tilemap_bytes {
+            println!(
+                "Showing tilemap starting with these bytes: {:?}",
+                (*bytes).iter().cloned().take(64).collect::<Vec<_>>()
+            );
+        }
         self.tilemap_program.tilemap_bytes = tilemap_bytes;
     }
     /** This is where tilemap handles its own messages. */
