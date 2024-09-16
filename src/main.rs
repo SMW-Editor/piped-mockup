@@ -80,6 +80,12 @@ impl Application for App {
             Message::TilemapLoaded(Some((path, bytes))) => {
                 println!("loaded {path:?}, {:?} bytes", bytes.len());
                 self.loaded_tilemaps.push((path, bytes.clone()));
+
+                // Choose the first loaded tilemap to display.
+                if self.loaded_tilemaps.len() == 1 {
+                    self.tilemap_with_controls.show(Some(bytes));
+                }
+
                 Command::none()
             }
             Message::SelectTilemap(tilemap) => {
