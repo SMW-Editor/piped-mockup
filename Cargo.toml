@@ -4,6 +4,13 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
-iced = { version = "0.12.1", features = ["image", "debug", "advanced"] }
+iced = { version = "0.12.1", features = [
+    "advanced",
+    "debug",
+    "image",
+    "tokio",
+] }
 bytemuck = "1.15.0"
 glam = { version = "0.29.0", features = ["bytemuck"] }
+tokio = { version = "1.40.0", features = ["fs"] }
+rfd = "0.14.1"

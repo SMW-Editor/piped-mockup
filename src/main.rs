@@ -1,5 +1,7 @@
 mod tilemap_program;
 
+use std::{path::PathBuf, sync::Arc};
+
 use tilemap_program::TilemapWithControls;
 
 use iced::{
@@ -24,10 +26,12 @@ struct App {
     tilemap_with_controls: TilemapWithControls,
 }
 
-#[derive(Debug, Clone, Copy)]
+#[allow(clippy::enum_variant_names)]
+#[derive(Debug, Clone)]
 enum Message {
     ToggleLarge,
     TilemapMessage(tilemap_program::Message),
+    BinFileLoaded(Option<(PathBuf, Arc<Vec<u8>>)>),
 }
 
 impl Application for App {
@@ -42,7 +46,13 @@ impl Application for App {
                 large: false,
                 tilemap_with_controls: TilemapWithControls::new(),
             },
-            Command::none(),
+            Command::perform(
+                load_file(PathBuf::from(format!(
+                    "{}/assets/grass.bin",
+                    env!("CARGO_MANIFEST_DIR")
+                ))),
+                Message::BinFileLoaded,
+            ),
         )
     }
     fn update(&mut self, message: Message) -> Command<Message> {
@@ -55,6 +65,11 @@ impl Application for App {
                 self.tilemap_with_controls.update(m),
                 Message::TilemapMessage,
             ),
+            Message::BinFileLoaded(Some((path, bytes))) => {
+                println!("loaded {path:?}, {:?} bytes", bytes.len());
+                Command::none()
+            }
+            _ => Command::none(),
         }
     }
 
@@ -88,4 +103,9 @@ impl Application for App {
         .into();
         element.explain(Color::BLACK)
     }
+}
+
+async fn load_file(path: PathBuf) -> Option<(PathBuf, Arc<Vec<u8>>)> {
+    let contents = tokio::fs::read(&path).await.ok()?;
+    Some((path, Arc::new(contents)))
 }
