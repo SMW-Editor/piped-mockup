@@ -19,15 +19,29 @@ use iced::{
 #[repr(C)]
 pub struct Uniforms {
     resolution: Vec2,
-    center: Vec2,
+    origin: Vec2,
     scale: f32,
-    max_iter: u32,
+    padding: u32,
+}
+
+#[derive(Copy, Clone, Debug, bytemuck::Pod, bytemuck::Zeroable)]
+#[repr(C)]
+pub struct SpriteTile {
+    x: u32,
+    y: u32,
+    id: u32,
+    pal: u8,
+    scale: u8,
+    flags: u16,
 }
 
 struct TilemapShaderPipeline {
     pipeline: wgpu::RenderPipeline,
+    tiles: Vec<SpriteTile>,
+    instance_buffer: wgpu::Buffer,
     palette_buffer: wgpu::Buffer,
     graphics_buffer: wgpu::Buffer,
+    uniform_buffer: wgpu::Buffer,
     bind_group: wgpu::BindGroup,
 }
 
@@ -46,9 +60,22 @@ impl TilemapShaderPipeline {
             vertex: wgpu::VertexState {
                 module: &shader,
                 entry_point: "vs_main",
-                buffers: &[],
+                buffers: &[wgpu::VertexBufferLayout {
+                    array_stride: std::mem::size_of::<SpriteTile>() as _,
+                    step_mode: wgpu::VertexStepMode::Instance,
+                    attributes: &[
+                        wgpu::VertexAttribute {
+                            offset: 0,
+                            shader_location: 0,
+                            format: wgpu::VertexFormat::Uint32x4,
+                        }
+                    ],
+                }],
             },
-            primitive: wgpu::PrimitiveState::default(),
+            primitive: wgpu::PrimitiveState {
+                topology: wgpu::PrimitiveTopology::TriangleStrip,
+                ..Default::default()
+            },
             depth_stencil: None,
             multisample: wgpu::MultisampleState::default(),
             fragment: Some(wgpu::FragmentState {
@@ -63,11 +90,28 @@ impl TilemapShaderPipeline {
             multiview: None,
         });
 
+        let mut tiles = vec![];
+        for i in 0..64u32 {
+            let tx = i % 8 * 16;
+            let ty = i / 8 * 16;
+            tiles.push(SpriteTile { x: tx + 0, y: ty + 0, id: i*4+0, flags: 0, pal: 3, scale: 1 });
+            tiles.push(SpriteTile { x: tx + 8, y: ty + 0, id: i*4+1, flags: 0, pal: 3, scale: 1 });
+            tiles.push(SpriteTile { x: tx + 0, y: ty + 8, id: i*4+2, flags: 0, pal: 3, scale: 1 });
+            tiles.push(SpriteTile { x: tx + 8, y: ty + 8, id: i*4+3, flags: 0, pal: 3, scale: 1 });
+        }
+
+
+        let instance_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+            label: Some("shader_quad instance buffer"),
+            contents: bytemuck::cast_slice(&tiles),
+            usage: wgpu::BufferUsages::VERTEX,
+        });
+
         let mut palette = image::open("assets/palette.png").unwrap().to_rgba32f();
         palette.as_flat_samples_mut().samples.into_iter().for_each(|c| *c = c.powf(2.2));
         let palette_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
             label: Some("shader_quad palette buffer"),
-            contents: unsafe { palette.as_flat_samples().samples.align_to().1 },
+            contents: bytemuck::cast_slice(&palette.as_flat_samples().samples),
             usage: wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_DST,
         });
 
@@ -76,6 +120,12 @@ impl TilemapShaderPipeline {
             label: Some("shader_quad graphics buffer"),
             contents: &graphics,
             usage: wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_DST,
+        });
+        let uniform_buffer = device.create_buffer(&wgpu::BufferDescriptor {
+            label: Some("shader_quad uniform buffer"),
+            size: std::mem::size_of::<Uniforms>() as _,
+            usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
+            mapped_at_creation: false,
         });
 
         let bind_group_layout = pipeline.get_bind_group_layout(0);
@@ -88,11 +138,17 @@ impl TilemapShaderPipeline {
             }, wgpu::BindGroupEntry {
                 binding: 1,
                 resource: graphics_buffer.as_entire_binding(),
+            }, wgpu::BindGroupEntry {
+                binding: 2,
+                resource: uniform_buffer.as_entire_binding(),
             }],
         });
 
         Self {
             pipeline,
+            tiles,
+            uniform_buffer,
+            instance_buffer,
             palette_buffer,
             graphics_buffer,
             bind_group,
@@ -100,7 +156,8 @@ impl TilemapShaderPipeline {
     }
 
     fn update(&mut self, queue: &wgpu::Queue, uniforms: &Uniforms) {
-        //queue.write_buffer(&self.uniform_buffer, 0, bytemuck::bytes_of(uniforms));
+        println!("{:?}", uniforms);
+        queue.write_buffer(&self.uniform_buffer, 0, bytemuck::bytes_of(uniforms));
     }
 
     fn render(
@@ -134,8 +191,9 @@ impl TilemapShaderPipeline {
             1.0,
         );
         pass.set_bind_group(0, &self.bind_group, &[]);
+        pass.set_vertex_buffer(0, self.instance_buffer.slice(..));
 
-        pass.draw(0..3, 0..1);
+        pass.draw(0..4, 0..self.tiles.len() as u32);
     }
 }
 
@@ -187,7 +245,7 @@ impl shader::Primitive for TilemapPrimitive {
         format: wgpu::TextureFormat,
         device: &wgpu::Device,
         queue: &wgpu::Queue,
-        _bounds: Rectangle,
+        bounds: Rectangle,
         target_size: Size<u32>,
         _scale_factor: f32,
         storage: &mut shader::Storage,
@@ -201,10 +259,10 @@ impl shader::Primitive for TilemapPrimitive {
         pipeline.update(
             queue,
             &Uniforms {
-                resolution: Vec2::new(target_size.width as f32, target_size.height as f32),
-                center: self.controls.center,
+                resolution: Vec2::new(bounds.width as f32, bounds.height as f32),
+                origin: self.controls.center,
                 scale: self.controls.scale(),
-                max_iter: self.controls.max_iter,
+                padding: 0,
             },
         );
     }
@@ -303,7 +361,9 @@ impl TilemapWithControls {
 
         container(
             column![
-                shader_element(&self.tilemap_program).width(400).height(400),
+                shader_element(&self.tilemap_program)
+                    .width(512).height(iced::Length::Fill),
+                    //.width(512).height(512),
                 shader_controls,
             ]
             .align_items(Alignment::Center),
