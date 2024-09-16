@@ -1,20 +1,17 @@
 use glam::Vec2;
-use iced::advanced::Shell;
-use iced::event::Status;
-use iced::mouse;
-use iced::mouse::Cursor;
-use iced::widget::shader;
-use iced::widget::shader::wgpu;
-use iced::widget::shader::Event;
-use iced::{Rectangle, Size};
-
-use crate::Message;
-
-const ZOOM_DEFAULT: f32 = 2.0;
-const ZOOM_PIXELS_FACTOR: f32 = 200.0;
-const ITERS_DEFAULT: u32 = 20;
-
-const CENTER_DEFAULT: Vec2 = Vec2::new(-1.5, 0.0);
+// We have to alias the shader element because it has the same name as the iced::widget::shader module, and the `self` syntax only imports the module.
+use iced::widget::shader as shader_element;
+use iced::{
+    advanced::Shell,
+    event::Status,
+    mouse::{self, Cursor},
+    widget::{
+        column, container, row,
+        shader::{self, wgpu, Event},
+        slider, text,
+    },
+    Alignment, Command, Element, Length, Rectangle, Size,
+};
 
 #[derive(Copy, Clone, Debug, bytemuck::Pod, bytemuck::Zeroable)]
 #[repr(C)]
@@ -128,14 +125,22 @@ impl FragmentShaderPipeline {
 }
 
 #[derive(Debug, Clone, Copy)]
-pub struct Controls {
-    pub max_iter: u32,
-    pub zoom: f32,
-    pub center: Vec2,
+struct Controls {
+    max_iter: u32,
+    zoom: f32,
+    center: Vec2,
+}
+
+#[derive(Debug, Clone, Copy)]
+pub enum Message {
+    UpdateMaxIterations(u32),
+    UpdateZoom(f32),
+    PanningDelta(Vec2),
+    ZoomDelta(Vec2, Rectangle, f32),
 }
 
 impl Controls {
-    pub fn scale(&self) -> f32 {
+    fn scale(&self) -> f32 {
         1.0 / 2.0_f32.powf(self.zoom) / ZOOM_PIXELS_FACTOR
     }
 }
@@ -202,23 +207,90 @@ impl shader::Primitive for FragmentShaderPrimitive {
     }
 }
 
+#[derive(Default)]
 pub enum MouseInteraction {
+    #[default]
     Idle,
     Panning(Vec2),
 }
 
-impl Default for MouseInteraction {
-    fn default() -> Self {
-        MouseInteraction::Idle
+pub struct TilemapWithControls {
+    tilemap_program: TilemapProgram,
+}
+impl TilemapWithControls {
+    pub fn new() -> Self {
+        Self {
+            tilemap_program: TilemapProgram::new(),
+        }
+    }
+    pub fn update(&mut self, message: Message) -> Command<Message> {
+        match message {
+            Message::UpdateMaxIterations(max_iter) => {
+                self.tilemap_program.controls.max_iter = max_iter;
+                Command::none()
+            }
+            Message::UpdateZoom(zoom) => {
+                self.tilemap_program.controls.zoom = zoom;
+                Command::none()
+            }
+            Message::PanningDelta(delta) => {
+                self.tilemap_program.controls.center -=
+                    2.0 * delta * self.tilemap_program.controls.scale();
+                Command::none()
+            }
+            Message::ZoomDelta(pos, bounds, delta) => {
+                let delta = delta * ZOOM_WHEEL_SCALE;
+                let prev_scale = self.tilemap_program.controls.scale();
+                let prev_zoom = self.tilemap_program.controls.zoom;
+                self.tilemap_program.controls.zoom = (prev_zoom + delta).clamp(ZOOM_MIN, ZOOM_MAX);
+
+                let vec = pos - Vec2::new(bounds.width, bounds.height) * 0.5;
+                let new_scale = self.tilemap_program.controls.scale();
+                self.tilemap_program.controls.center += vec * (prev_scale - new_scale) * 2.0;
+                Command::none()
+            }
+        }
+    }
+
+    pub fn view(&self) -> Element<Message> {
+        let shader_controls = row![
+            control(
+                "Max iterations",
+                slider(
+                    ITERS_MIN..=ITERS_MAX,
+                    self.tilemap_program.controls.max_iter,
+                    move |iter| { Message::UpdateMaxIterations(iter) }
+                )
+                .width(Length::Fill)
+            ),
+            control(
+                "Zoom",
+                slider(
+                    ZOOM_MIN..=ZOOM_MAX,
+                    self.tilemap_program.controls.zoom,
+                    move |zoom| { Message::UpdateZoom(zoom) }
+                )
+                .step(0.01)
+                .width(Length::Fill)
+            ),
+        ];
+
+        container(
+            column![
+                shader_element(&self.tilemap_program).width(400).height(400),
+                shader_controls,
+            ]
+            .align_items(Alignment::Center),
+        )
+        .into()
     }
 }
-
-pub struct TilemapProgram {
-    pub controls: Controls,
+struct TilemapProgram {
+    controls: Controls,
 }
 
 impl TilemapProgram {
-    pub fn new() -> Self {
+    fn new() -> Self {
         Self {
             controls: Controls::default(),
         }
@@ -260,6 +332,7 @@ impl shader::Program<Message> for TilemapProgram {
             }
         }
 
+        #[allow(clippy::single_match)]
         match state {
             MouseInteraction::Idle => match event {
                 Event::Mouse(mouse::Event::ButtonPressed(mouse::Button::Left)) => {
@@ -287,3 +360,21 @@ impl shader::Program<Message> for TilemapProgram {
         (Status::Ignored, None)
     }
 }
+
+fn control<'a>(
+    label: &'static str,
+    control: impl Into<Element<'a, Message>>,
+) -> Element<'a, Message> {
+    row![text(label), control.into()].spacing(10).into()
+}
+
+const ZOOM_DEFAULT: f32 = 2.0;
+const ZOOM_MIN: f32 = 1.0;
+const ZOOM_MAX: f32 = 17.0;
+const ZOOM_WHEEL_SCALE: f32 = 0.2;
+const ZOOM_PIXELS_FACTOR: f32 = 200.0;
+const ITERS_DEFAULT: u32 = 20;
+const ITERS_MIN: u32 = 20;
+const ITERS_MAX: u32 = 200;
+
+const CENTER_DEFAULT: Vec2 = Vec2::new(-1.5, 0.0);
