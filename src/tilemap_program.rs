@@ -9,7 +9,7 @@ use iced::{
     mouse::{self, Cursor},
     widget::{
         column, container, row,
-        shader::{self, wgpu, Event},
+        shader::{self, wgpu, wgpu::util::DeviceExt, Event},
         slider, text,
     },
     Alignment, Command, Element, Length, Rectangle, Size,
@@ -26,8 +26,9 @@ pub struct Uniforms {
 
 struct TilemapShaderPipeline {
     pipeline: wgpu::RenderPipeline,
-    uniform_buffer: wgpu::Buffer,
-    uniform_bind_group: wgpu::BindGroup,
+    palette_buffer: wgpu::Buffer,
+    graphics_buffer: wgpu::Buffer,
+    bind_group: wgpu::BindGroup,
 }
 
 impl TilemapShaderPipeline {
@@ -62,32 +63,44 @@ impl TilemapShaderPipeline {
             multiview: None,
         });
 
-        let uniform_buffer = device.create_buffer(&wgpu::BufferDescriptor {
-            label: Some("shader_quad uniform buffer"),
-            size: std::mem::size_of::<Uniforms>() as u64,
-            usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
-            mapped_at_creation: false,
+        let mut palette = image::open("assets/palette.png").unwrap().to_rgba32f();
+        palette.as_flat_samples_mut().samples.into_iter().for_each(|c| *c = c.powf(2.2));
+        let palette_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+            label: Some("shader_quad palette buffer"),
+            contents: unsafe { palette.as_flat_samples().samples.align_to().1 },
+            usage: wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_DST,
         });
 
-        let uniform_bind_group_layout = pipeline.get_bind_group_layout(0);
-        let uniform_bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
-            label: Some("shader_quad uniform bind group"),
-            layout: &uniform_bind_group_layout,
+        let graphics = std::fs::read("assets/global.bin").unwrap();
+        let graphics_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+            label: Some("shader_quad graphics buffer"),
+            contents: &graphics,
+            usage: wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_DST,
+        });
+
+        let bind_group_layout = pipeline.get_bind_group_layout(0);
+        let bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
+            label: Some("shader_quad bind group"),
+            layout: &bind_group_layout,
             entries: &[wgpu::BindGroupEntry {
                 binding: 0,
-                resource: uniform_buffer.as_entire_binding(),
+                resource: palette_buffer.as_entire_binding(),
+            }, wgpu::BindGroupEntry {
+                binding: 1,
+                resource: graphics_buffer.as_entire_binding(),
             }],
         });
 
         Self {
             pipeline,
-            uniform_buffer,
-            uniform_bind_group,
+            palette_buffer,
+            graphics_buffer,
+            bind_group,
         }
     }
 
     fn update(&mut self, queue: &wgpu::Queue, uniforms: &Uniforms) {
-        queue.write_buffer(&self.uniform_buffer, 0, bytemuck::bytes_of(uniforms));
+        //queue.write_buffer(&self.uniform_buffer, 0, bytemuck::bytes_of(uniforms));
     }
 
     fn render(
@@ -120,7 +133,7 @@ impl TilemapShaderPipeline {
             0.0,
             1.0,
         );
-        pass.set_bind_group(0, &self.uniform_bind_group, &[]);
+        pass.set_bind_group(0, &self.bind_group, &[]);
 
         pass.draw(0..3, 0..1);
     }
