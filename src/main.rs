@@ -24,7 +24,7 @@ fn main() -> iced::Result {
 struct App {
     large: bool,
     tilemap_with_controls: TilemapWithControls,
-    loaded_tilemap: Option<(PathBuf, Arc<Vec<u8>>)>,
+    loaded_tilemaps: Vec<(PathBuf, Arc<Vec<u8>>)>,
 }
 
 #[allow(clippy::enum_variant_names)]
@@ -46,15 +46,24 @@ impl Application for App {
             App {
                 large: false,
                 tilemap_with_controls: TilemapWithControls::new(),
-                loaded_tilemap: None,
+                loaded_tilemaps: vec![],
             },
-            Command::perform(
-                load_file(PathBuf::from(format!(
-                    "{}/assets/grass.bin",
-                    env!("CARGO_MANIFEST_DIR")
-                ))),
-                Message::TilemapLoaded,
-            ),
+            Command::batch([
+                Command::perform(
+                    load_file(PathBuf::from(format!(
+                        "{}/assets/global.bin",
+                        env!("CARGO_MANIFEST_DIR")
+                    ))),
+                    Message::TilemapLoaded,
+                ),
+                Command::perform(
+                    load_file(PathBuf::from(format!(
+                        "{}/assets/grass.bin",
+                        env!("CARGO_MANIFEST_DIR")
+                    ))),
+                    Message::TilemapLoaded,
+                ),
+            ]),
         )
     }
     fn update(&mut self, message: Message) -> Command<Message> {
@@ -69,8 +78,7 @@ impl Application for App {
             ),
             Message::TilemapLoaded(Some((path, bytes))) => {
                 println!("loaded {path:?}, {:?} bytes", bytes.len());
-
-                self.loaded_tilemap = Some((path, bytes.clone()));
+                self.loaded_tilemaps.push((path, bytes.clone()));
                 self.tilemap_with_controls.show(Some(bytes));
                 Command::none()
             }
