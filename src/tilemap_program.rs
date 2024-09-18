@@ -1,27 +1,26 @@
 use std::sync::Arc;
 
 use glam::Vec2;
-// We have to alias the shader element because it has the same name as the iced::widget::shader module, and the `self` syntax only imports the module.
-use iced::widget::shader as shader_element;
 
+use iced::Point;
 use iced::{
     advanced::Shell,
     event::Status,
     mouse::{self, Cursor},
     widget::{
-        column, container, row,
+        column, container,
         shader::{self, wgpu, wgpu::util::DeviceExt, Event, Viewport},
-        slider, text,
     },
-    Alignment, Element, Length, Rectangle, Task,
+    Alignment, Element, Length, Rectangle,
 };
+
+// We have to alias the shader element because it has the same name as the iced::widget::shader module, and the `self` syntax only imports the module.
+use iced::widget::shader as shader_element;
 
 #[derive(Copy, Clone, Debug, bytemuck::Pod, bytemuck::Zeroable)]
 #[repr(C)]
 pub struct Uniforms {
     resolution: Vec2,
-    origin: Vec2,
-    scale: f32,
     padding: u32,
 }
 
@@ -231,45 +230,16 @@ impl TilemapShaderPipeline {
 }
 
 #[derive(Debug, Clone, Copy)]
-struct Controls {
-    max_iter: u32,
-    zoom: f32,
-    center: Vec2,
-}
-
-#[derive(Debug, Clone, Copy)]
 pub enum Message {
-    CursorMoved(Vec2),
-    UpdateMaxIterations(u32),
-    UpdateZoom(f32),
-    PanningDelta(Vec2),
-    ZoomDelta(Vec2, Rectangle, f32),
-}
-
-impl Controls {
-    fn scale(&self) -> f32 {
-        1.0 / 2.0_f32.powf(self.zoom) / ZOOM_PIXELS_FACTOR
-    }
-}
-
-impl Default for Controls {
-    fn default() -> Self {
-        Self {
-            max_iter: ITERS_DEFAULT,
-            zoom: ZOOM_DEFAULT,
-            center: CENTER_DEFAULT,
-        }
-    }
+    CursorMoved(Point),
 }
 
 #[derive(Debug)]
-pub struct TilemapPrimitive {
-    controls: Controls,
-}
+pub struct TilemapPrimitive {}
 
 impl TilemapPrimitive {
-    fn new(controls: Controls) -> Self {
-        Self { controls }
+    fn new() -> Self {
+        Self {}
     }
 }
 
@@ -293,8 +263,6 @@ impl shader::Primitive for TilemapPrimitive {
             queue,
             &Uniforms {
                 resolution: Vec2::new(bounds.width as f32, bounds.height as f32),
-                origin: self.controls.center,
-                scale: self.controls.scale(),
                 padding: 0,
             },
         );
@@ -312,17 +280,10 @@ impl shader::Primitive for TilemapPrimitive {
     }
 }
 
-#[derive(Default)]
-pub enum MouseInteraction {
-    #[default]
-    Idle,
-    Panning(Vec2),
-}
-
-pub struct TilemapWithControls {
+pub struct Tilemap {
     tilemap_program: TilemapProgram,
 }
-impl TilemapWithControls {
+impl Tilemap {
     pub fn new() -> Self {
         Self {
             tilemap_program: TilemapProgram::new(),
@@ -338,89 +299,31 @@ impl TilemapWithControls {
         }
         self.tilemap_program.tilemap_bytes = tilemap_bytes;
     }
-    /** This is where tilemap handles its own messages. */
-    pub fn update(&mut self, message: Message) -> Task<Message> {
-        match message {
-            Message::UpdateMaxIterations(max_iter) => {
-                self.tilemap_program.controls.max_iter = max_iter;
-                Task::none()
-            }
-            Message::UpdateZoom(zoom) => {
-                self.tilemap_program.controls.zoom = zoom;
-                Task::none()
-            }
-            Message::PanningDelta(delta) => {
-                self.tilemap_program.controls.center -=
-                    2.0 * delta * self.tilemap_program.controls.scale();
-                Task::none()
-            }
-            Message::ZoomDelta(pos, bounds, delta) => {
-                let delta = delta * ZOOM_WHEEL_SCALE;
-                let prev_scale = self.tilemap_program.controls.scale();
-                let prev_zoom = self.tilemap_program.controls.zoom;
-                self.tilemap_program.controls.zoom = (prev_zoom + delta).clamp(ZOOM_MIN, ZOOM_MAX);
-
-                let vec = pos - Vec2::new(bounds.width, bounds.height) * 0.5;
-                let new_scale = self.tilemap_program.controls.scale();
-                self.tilemap_program.controls.center += vec * (prev_scale - new_scale) * 2.0;
-                Task::none()
-            }
-            _ => Command::none(),
-        }
-    }
 
     pub fn view(&self) -> Element<Message> {
-        let shader_controls = row![
-            control(
-                "Max iterations",
-                slider(
-                    ITERS_MIN..=ITERS_MAX,
-                    self.tilemap_program.controls.max_iter,
-                    move |iter| { Message::UpdateMaxIterations(iter) }
-                )
-                .width(Length::Fill)
-            ),
-            control(
-                "Zoom",
-                slider(
-                    ZOOM_MIN..=ZOOM_MAX,
-                    self.tilemap_program.controls.zoom,
-                    move |zoom| { Message::UpdateZoom(zoom) }
-                )
-                .step(0.01)
-                .width(Length::Fill)
-            ),
-        ];
-
         container(
-            column![
-                shader_element(&self.tilemap_program)
-                    .width(512)
-                    .height(iced::Length::Fill),
-                //.width(512).height(512),
-                shader_controls,
-            ]
+            column![shader_element(&self.tilemap_program)
+                .width(512)
+                .height(Length::Fill)]
             .align_x(Alignment::Center),
         )
         .into()
     }
 }
 struct TilemapProgram {
-    controls: Controls,
     tilemap_bytes: Option<Arc<Vec<u8>>>,
 }
 
 impl TilemapProgram {
     fn new() -> Self {
         Self {
-            controls: Controls::default(),
             tilemap_bytes: None,
         }
     }
 }
 
 impl shader::Program<Message> for TilemapProgram {
-    type State = MouseInteraction;
+    type State = ();
     type Primitive = TilemapPrimitive;
 
     fn draw(
@@ -429,7 +332,7 @@ impl shader::Program<Message> for TilemapProgram {
         _cursor: mouse::Cursor,
         _bounds: Rectangle,
     ) -> Self::Primitive {
-        TilemapPrimitive::new(self.controls)
+        TilemapPrimitive::new()
     }
 
     fn update(
@@ -440,48 +343,9 @@ impl shader::Program<Message> for TilemapProgram {
         cursor: Cursor,
         _shell: &mut Shell<'_, Message>,
     ) -> (Status, Option<Message>) {
-        if let Event::Mouse(mouse::Event::WheelScrolled { delta }) = event {
-            if let Some(pos) = cursor.position_in(bounds) {
-                let pos = Vec2::new(pos.x, pos.y);
-                let delta = match delta {
-                    mouse::ScrollDelta::Lines { x: _, y } => y,
-                    mouse::ScrollDelta::Pixels { x: _, y } => y,
-                };
-                return (
-                    Status::Captured,
-                    Some(Message::ZoomDelta(pos, bounds, delta)),
-                );
-            }
-        }
-
-        #[allow(clippy::single_match)]
-        match state {
-            MouseInteraction::Idle => match event {
-                Event::Mouse(mouse::Event::ButtonPressed(mouse::Button::Left)) => {
-                    if let Some(pos) = cursor.position_over(bounds) {
-                        *state = MouseInteraction::Panning(Vec2::new(pos.x, pos.y));
-                        return (Status::Captured, None);
-                    }
-                }
-                _ => {}
-            },
-            MouseInteraction::Panning(prev_pos) => match event {
-                Event::Mouse(mouse::Event::ButtonReleased(mouse::Button::Left)) => {
-                    *state = MouseInteraction::Idle;
-                }
-                Event::Mouse(mouse::Event::CursorMoved { position }) => {
-                    let pos = Vec2::new(position.x, position.y);
-                    let delta = pos - *prev_pos;
-                    *state = MouseInteraction::Panning(pos);
-                    return (Status::Captured, Some(Message::PanningDelta(delta)));
-                }
-                _ => {}
-            },
-        };
-
         #[allow(clippy::single_match)]
         match event {
-            Event::Mouse(mouse::Event::CursorMoved { position }) => {
+            Event::Mouse(mouse::Event::CursorMoved { .. }) => {
                 if let Some(pos) = cursor.position_in(bounds) {
                     return (Status::Ignored, Some(Message::CursorMoved(pos)));
                 }
@@ -492,21 +356,3 @@ impl shader::Program<Message> for TilemapProgram {
         (Status::Ignored, None)
     }
 }
-
-fn control<'a>(
-    label: &'static str,
-    control: impl Into<Element<'a, Message>>,
-) -> Element<'a, Message> {
-    row![text(label), control.into()].spacing(10).into()
-}
-
-const ZOOM_DEFAULT: f32 = 2.0;
-const ZOOM_MIN: f32 = 1.0;
-const ZOOM_MAX: f32 = 17.0;
-const ZOOM_WHEEL_SCALE: f32 = 0.2;
-const ZOOM_PIXELS_FACTOR: f32 = 200.0;
-const ITERS_DEFAULT: u32 = 20;
-const ITERS_MIN: u32 = 20;
-const ITERS_MAX: u32 = 200;
-
-const CENTER_DEFAULT: Vec2 = Vec2::new(-1.5, 0.0);

@@ -2,7 +2,7 @@ mod tilemap_program;
 
 use std::{path::PathBuf, sync::Arc};
 
-use tilemap_program::TilemapWithControls;
+use tilemap_program::Tilemap;
 
 use iced::{
     application,
@@ -26,7 +26,7 @@ fn main() -> iced::Result {
 
 struct App {
     large: bool,
-    tilemap_with_controls: TilemapWithControls,
+    tilemap: Tilemap,
     loaded_tilemaps: Vec<(PathBuf, Arc<Vec<u8>>)>,
 }
 
@@ -43,7 +43,7 @@ impl App {
         (
             App {
                 large: false,
-                tilemap_with_controls: TilemapWithControls::new(),
+                tilemap: Tilemap::new(),
                 loaded_tilemaps: vec![],
             },
             Task::batch([
@@ -70,23 +70,20 @@ impl App {
                 self.large = !self.large;
                 Task::none()
             }
-            Message::TilemapMessage(m) => Task::map(
-                self.tilemap_with_controls.update(m),
-                Message::TilemapMessage,
-            ),
+            Message::TilemapMessage(tilemap_program::Message::CursorMoved(_pos)) => Task::none(),
             Message::TilemapLoaded(Some((path, bytes))) => {
                 println!("loaded {path:?}, {:?} bytes", bytes.len());
                 self.loaded_tilemaps.push((path, bytes.clone()));
 
                 // Choose the first loaded tilemap to display.
                 if self.loaded_tilemaps.len() == 1 {
-                    self.tilemap_with_controls.show(Some(bytes));
+                    self.tilemap.show(Some(bytes));
                 }
 
                 Task::none()
             }
             Message::SelectTilemap(tilemap) => {
-                self.tilemap_with_controls.show(Some(tilemap.1));
+                self.tilemap.show(Some(tilemap.1));
                 Task::none()
             }
             _ => Task::none(),
@@ -112,7 +109,7 @@ impl App {
                 }))
                 .align_x(Alignment::Center),
                 "Tilemap:",
-                Element::map(self.tilemap_with_controls.view(), Message::TilemapMessage),
+                Element::map(self.tilemap.view(), Message::TilemapMessage),
             ]
             .align_x(Alignment::Center)
             .spacing(20),
