@@ -239,6 +239,7 @@ struct Controls {
 
 #[derive(Debug, Clone, Copy)]
 pub enum Message {
+    CursorMoved(Vec2),
     UpdateMaxIterations(u32),
     UpdateZoom(f32),
     PanningDelta(Vec2),
@@ -364,6 +365,7 @@ impl TilemapWithControls {
                 self.tilemap_program.controls.center += vec * (prev_scale - new_scale) * 2.0;
                 Task::none()
             }
+            _ => Command::none(),
         }
     }
 
@@ -432,7 +434,7 @@ impl shader::Program<Message> for TilemapProgram {
 
     fn update(
         &self,
-        state: &mut Self::State,
+        _state: &mut Self::State,
         event: Event,
         bounds: Rectangle,
         cursor: Cursor,
@@ -475,6 +477,16 @@ impl shader::Program<Message> for TilemapProgram {
                 }
                 _ => {}
             },
+        };
+
+        #[allow(clippy::single_match)]
+        match event {
+            Event::Mouse(mouse::Event::CursorMoved { position }) => {
+                if let Some(pos) = cursor.position_in(bounds) {
+                    return (Status::Ignored, Some(Message::CursorMoved(pos)));
+                }
+            }
+            _ => {}
         };
 
         (Status::Ignored, None)
