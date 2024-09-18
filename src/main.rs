@@ -5,20 +5,23 @@ use std::{path::PathBuf, sync::Arc};
 use tilemap_program::TilemapWithControls;
 
 use iced::{
-    executor,
+    application,
     widget::{button, column, container, image},
-    window, Alignment, Application, Color, Command, Element, Length, Settings, Theme,
+    window, Alignment, Element, Length, Settings, Task, Theme,
 };
 
 fn main() -> iced::Result {
-    App::run(Settings {
-        antialiasing: true,
-        window: window::Settings {
+    application("Piped Mockup", App::update, App::view)
+        .theme(|_| Theme::Dark)
+        .settings(Settings {
+            antialiasing: true,
+            ..Default::default()
+        })
+        .window(window::Settings {
             position: window::Position::Centered,
             ..Default::default()
-        },
-        ..Default::default()
-    })
+        })
+        .run_with(App::new)
 }
 
 struct App {
@@ -35,29 +38,23 @@ enum Message {
     TilemapLoaded(Option<(PathBuf, Arc<Vec<u8>>)>),
     SelectTilemap((PathBuf, Arc<Vec<u8>>)),
 }
-
-impl Application for App {
-    type Executor = executor::Default;
-    type Flags = ();
-    type Message = Message;
-    type Theme = Theme;
-
-    fn new(_: Self::Flags) -> (Self, Command<Message>) {
+impl App {
+    fn new() -> (Self, Task<Message>) {
         (
             App {
                 large: false,
                 tilemap_with_controls: TilemapWithControls::new(),
                 loaded_tilemaps: vec![],
             },
-            Command::batch([
-                Command::perform(
+            Task::batch([
+                Task::perform(
                     load_file(PathBuf::from(format!(
                         "{}/assets/global.bin",
                         env!("CARGO_MANIFEST_DIR")
                     ))),
                     Message::TilemapLoaded,
                 ),
-                Command::perform(
+                Task::perform(
                     load_file(PathBuf::from(format!(
                         "{}/assets/grass.bin",
                         env!("CARGO_MANIFEST_DIR")
@@ -67,13 +64,13 @@ impl Application for App {
             ]),
         )
     }
-    fn update(&mut self, message: Message) -> Command<Message> {
+    fn update(&mut self, message: Message) -> Task<Message> {
         match message {
             Message::ToggleLarge => {
                 self.large = !self.large;
-                Command::none()
+                Task::none()
             }
-            Message::TilemapMessage(m) => Command::map(
+            Message::TilemapMessage(m) => Task::map(
                 self.tilemap_with_controls.update(m),
                 Message::TilemapMessage,
             ),
@@ -86,22 +83,16 @@ impl Application for App {
                     self.tilemap_with_controls.show(Some(bytes));
                 }
 
-                Command::none()
+                Task::none()
             }
             Message::SelectTilemap(tilemap) => {
                 self.tilemap_with_controls.show(Some(tilemap.1));
-                Command::none()
+                Task::none()
             }
-            _ => Command::none(),
+            _ => Task::none(),
         }
     }
 
-    fn title(&self) -> String {
-        "Piped Mockup".into()
-    }
-    fn theme(&self) -> Theme {
-        Theme::Dark
-    }
     fn view(&self) -> Element<Message> {
         container(
             column![
@@ -119,15 +110,13 @@ impl Application for App {
                         .on_press(Message::SelectTilemap(tilemap.clone()))
                         .into()
                 }))
-                .align_items(Alignment::Center),
+                .align_x(Alignment::Center),
                 "Tilemap:",
                 Element::map(self.tilemap_with_controls.view(), Message::TilemapMessage),
             ]
-            .align_items(Alignment::Center)
+            .align_x(Alignment::Center)
             .spacing(20),
         )
-        .center_x()
-        .center_y()
         .height(Length::Fill)
         .width(Length::Fill)
         .into()
