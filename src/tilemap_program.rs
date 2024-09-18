@@ -1,4 +1,5 @@
 use std::sync::Arc;
+use std::sync::RwLock;
 
 use glam::Vec2;
 
@@ -35,6 +36,7 @@ pub struct SpriteTile {
     flags: u16,
 }
 
+#[derive(Debug)]
 struct TilemapShaderPipeline {
     pipeline: wgpu::RenderPipeline,
     tiles: Vec<SpriteTile>,
@@ -191,9 +193,10 @@ impl TilemapShaderPipeline {
         }
     }
 
-    fn update(&mut self, queue: &wgpu::Queue, uniforms: &Uniforms) {
+    fn write_uniforms(&mut self, queue: &wgpu::Queue, uniforms: &Uniforms) {
         queue.write_buffer(&self.uniform_buffer, 0, bytemuck::bytes_of(uniforms));
     }
+    
 
     fn render(
         &self,
@@ -237,14 +240,20 @@ pub enum Message {
     CursorMoved(Point),
 }
 
+#[derive(Default, Debug, Clone)]
+pub struct TilemapState {
+    pipeline: Arc<RwLock<Option<TilemapShaderPipeline>>>,
+}
+
 #[derive(Debug)]
 pub struct TilemapPrimitive {
     tilemap_bytes: Arc<Vec<u8>>,
+    state: TilemapState,
 }
 
 impl TilemapPrimitive {
-    fn new(tilemap_bytes: Arc<Vec<u8>>) -> Self {
-        Self { tilemap_bytes }
+    fn new(tilemap_bytes: Arc<Vec<u8>>, state: TilemapState) -> Self {
+        Self { tilemap_bytes, state }
     }
 }
 
@@ -258,6 +267,7 @@ impl shader::Primitive for TilemapPrimitive {
         bounds: &Rectangle,
         _viewport: &Viewport,
     ) {
+        /*
         if !storage.has::<TilemapShaderPipeline>() {
             storage.store(TilemapShaderPipeline::new(
                 self.tilemap_bytes.clone(),
@@ -267,8 +277,16 @@ impl shader::Primitive for TilemapPrimitive {
         }
 
         let pipeline = storage.get_mut::<TilemapShaderPipeline>().unwrap();
-
-        pipeline.update(
+        */
+        let mut pipeline = self.state.pipeline.write().unwrap();
+        let pipeline = pipeline.get_or_insert_with(|| {
+            TilemapShaderPipeline::new(
+                self.tilemap_bytes.clone(),
+                device,
+                format
+            )
+        });
+        pipeline.write_uniforms(
             queue,
             &Uniforms {
                 resolution: Vec2::new(bounds.width as f32, bounds.height as f32),
@@ -284,8 +302,10 @@ impl shader::Primitive for TilemapPrimitive {
         target: &wgpu::TextureView,
         clip_bounds: &Rectangle<u32>,
     ) {
-        let pipeline = storage.get::<TilemapShaderPipeline>().unwrap();
-        pipeline.render(target, encoder, *clip_bounds);
+        //let pipeline = storage.get::<TilemapShaderPipeline>().unwrap();
+        self.state.pipeline.read().unwrap()
+            .as_ref().unwrap()
+            .render(target, encoder, *clip_bounds);
     }
 }
 
@@ -320,16 +340,16 @@ impl TilemapProgram {
 }
 
 impl shader::Program<Message> for TilemapProgram {
-    type State = ();
+    type State = TilemapState;
     type Primitive = TilemapPrimitive;
 
     fn draw(
         &self,
-        _state: &Self::State,
+        state: &Self::State,
         _cursor: mouse::Cursor,
         _bounds: Rectangle,
     ) -> Self::Primitive {
-        TilemapPrimitive::new(self.tilemap_bytes.clone())
+        TilemapPrimitive::new(self.tilemap_bytes.clone(), state.clone())
     }
 
     fn update(
