@@ -284,20 +284,10 @@ pub struct Tilemap {
     tilemap_program: TilemapProgram,
 }
 impl Tilemap {
-    pub fn new() -> Self {
+    pub fn new(bytes: Arc<Vec<u8>>) -> Self {
         Self {
-            tilemap_program: TilemapProgram::new(),
+            tilemap_program: TilemapProgram::new(bytes),
         }
-    }
-    /** Tell the tilemap to show these bytes. */
-    pub fn show(&mut self, tilemap_bytes: Option<Arc<Vec<u8>>>) {
-        if let Some(bytes) = &tilemap_bytes {
-            println!(
-                "Showing tilemap starting with these bytes: {:?}",
-                (*bytes).iter().cloned().take(64).collect::<Vec<_>>()
-            );
-        }
-        self.tilemap_program.tilemap_bytes = tilemap_bytes;
     }
 
     pub fn view(&self) -> Element<Message> {
@@ -311,14 +301,12 @@ impl Tilemap {
     }
 }
 struct TilemapProgram {
-    tilemap_bytes: Option<Arc<Vec<u8>>>,
+    _tilemap_bytes: Arc<Vec<u8>>,
 }
 
 impl TilemapProgram {
-    fn new() -> Self {
-        Self {
-            tilemap_bytes: None,
-        }
+    fn new(_tilemap_bytes: Arc<Vec<u8>>) -> Self {
+        Self { _tilemap_bytes }
     }
 }
 

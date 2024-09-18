@@ -26,7 +26,7 @@ fn main() -> iced::Result {
 
 struct App {
     large: bool,
-    tilemap: Tilemap,
+    tilemap: Option<Tilemap>,
     loaded_tilemaps: Vec<(PathBuf, Arc<Vec<u8>>)>,
 }
 
@@ -43,7 +43,7 @@ impl App {
         (
             App {
                 large: false,
-                tilemap: Tilemap::new(),
+                tilemap: None,
                 loaded_tilemaps: vec![],
             },
             Task::batch([
@@ -77,13 +77,13 @@ impl App {
 
                 // Choose the first loaded tilemap to display.
                 if self.loaded_tilemaps.len() == 1 {
-                    self.tilemap.show(Some(bytes));
+                    self.tilemap = Some(Tilemap::new(bytes));
                 }
 
                 Task::none()
             }
-            Message::SelectTilemap(tilemap) => {
-                self.tilemap.show(Some(tilemap.1));
+            Message::SelectTilemap((_path, bytes)) => {
+                self.tilemap = Some(Tilemap::new(bytes));
                 Task::none()
             }
             _ => Task::none(),
@@ -109,7 +109,10 @@ impl App {
                 }))
                 .align_x(Alignment::Center),
                 "Tilemap:",
-                Element::map(self.tilemap.view(), Message::TilemapMessage),
+                self.tilemap.as_ref().map_or_else(
+                    || container(column![]),
+                    |tilemap| container(Element::map(tilemap.view(), Message::TilemapMessage))
+                ),
             ]
             .align_x(Alignment::Center)
             .spacing(20),
