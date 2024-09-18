@@ -46,7 +46,11 @@ struct TilemapShaderPipeline {
 }
 
 impl TilemapShaderPipeline {
-    fn new(device: &wgpu::Device, format: wgpu::TextureFormat) -> Self {
+    fn new(
+        tilemap_bytes: Arc<Vec<u8>>,
+        device: &wgpu::Device,
+        format: wgpu::TextureFormat,
+    ) -> Self {
         let shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
             label: Some("TilemapShaderPipeline shader"),
             source: wgpu::ShaderSource::Wgsl(std::borrow::Cow::Borrowed(include_str!(
@@ -144,10 +148,9 @@ impl TilemapShaderPipeline {
             usage: wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_DST,
         });
 
-        let graphics = std::fs::read("assets/global.bin").unwrap();
         let graphics_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
             label: Some("shader_quad graphics buffer"),
-            contents: &graphics,
+            contents: &tilemap_bytes,
             usage: wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_DST,
         });
         let uniform_buffer = device.create_buffer(&wgpu::BufferDescriptor {
@@ -235,11 +238,13 @@ pub enum Message {
 }
 
 #[derive(Debug)]
-pub struct TilemapPrimitive {}
+pub struct TilemapPrimitive {
+    tilemap_bytes: Arc<Vec<u8>>,
+}
 
 impl TilemapPrimitive {
-    fn new() -> Self {
-        Self {}
+    fn new(tilemap_bytes: Arc<Vec<u8>>) -> Self {
+        Self { tilemap_bytes }
     }
 }
 
@@ -254,7 +259,11 @@ impl shader::Primitive for TilemapPrimitive {
         _viewport: &Viewport,
     ) {
         if !storage.has::<TilemapShaderPipeline>() {
-            storage.store(TilemapShaderPipeline::new(device, format));
+            storage.store(TilemapShaderPipeline::new(
+                self.tilemap_bytes.clone(),
+                device,
+                format,
+            ));
         }
 
         let pipeline = storage.get_mut::<TilemapShaderPipeline>().unwrap();
@@ -301,12 +310,12 @@ impl Tilemap {
     }
 }
 struct TilemapProgram {
-    _tilemap_bytes: Arc<Vec<u8>>,
+    tilemap_bytes: Arc<Vec<u8>>,
 }
 
 impl TilemapProgram {
-    fn new(_tilemap_bytes: Arc<Vec<u8>>) -> Self {
-        Self { _tilemap_bytes }
+    fn new(tilemap_bytes: Arc<Vec<u8>>) -> Self {
+        Self { tilemap_bytes }
     }
 }
 
@@ -320,7 +329,7 @@ impl shader::Program<Message> for TilemapProgram {
         _cursor: mouse::Cursor,
         _bounds: Rectangle,
     ) -> Self::Primitive {
-        TilemapPrimitive::new()
+        TilemapPrimitive::new(self.tilemap_bytes.clone())
     }
 
     fn update(
