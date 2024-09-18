@@ -331,25 +331,26 @@ impl Tilemap {
 }
 struct TilemapProgram {
     tilemap_bytes: Arc<Vec<u8>>,
+    state: TilemapState,
 }
 
 impl TilemapProgram {
     fn new(tilemap_bytes: Arc<Vec<u8>>) -> Self {
-        Self { tilemap_bytes }
+        Self { tilemap_bytes, state: Default::default(), }
     }
 }
 
 impl shader::Program<Message> for TilemapProgram {
-    type State = TilemapState;
+    type State = ();
     type Primitive = TilemapPrimitive;
 
     fn draw(
         &self,
-        state: &Self::State,
+        _state: &Self::State,
         _cursor: mouse::Cursor,
         _bounds: Rectangle,
     ) -> Self::Primitive {
-        TilemapPrimitive::new(self.tilemap_bytes.clone(), state.clone())
+        TilemapPrimitive::new(self.tilemap_bytes.clone(), self.state.clone())
     }
 
     fn update(
