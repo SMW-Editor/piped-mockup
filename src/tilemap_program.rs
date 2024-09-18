@@ -63,13 +63,11 @@ impl TilemapShaderPipeline {
                 buffers: &[wgpu::VertexBufferLayout {
                     array_stride: std::mem::size_of::<SpriteTile>() as _,
                     step_mode: wgpu::VertexStepMode::Instance,
-                    attributes: &[
-                        wgpu::VertexAttribute {
-                            offset: 0,
-                            shader_location: 0,
-                            format: wgpu::VertexFormat::Uint32x4,
-                        }
-                    ],
+                    attributes: &[wgpu::VertexAttribute {
+                        offset: 0,
+                        shader_location: 0,
+                        format: wgpu::VertexFormat::Uint32x4,
+                    }],
                 }],
             },
             primitive: wgpu::PrimitiveState {
@@ -94,12 +92,39 @@ impl TilemapShaderPipeline {
         for i in 0..64u32 {
             let tx = i % 8 * 16;
             let ty = i / 8 * 16;
-            tiles.push(SpriteTile { x: tx + 0, y: ty + 0, id: i*4+0, flags: 0, pal: 3, scale: 1 });
-            tiles.push(SpriteTile { x: tx + 8, y: ty + 0, id: i*4+1, flags: 0, pal: 3, scale: 1 });
-            tiles.push(SpriteTile { x: tx + 0, y: ty + 8, id: i*4+2, flags: 0, pal: 3, scale: 1 });
-            tiles.push(SpriteTile { x: tx + 8, y: ty + 8, id: i*4+3, flags: 0, pal: 3, scale: 1 });
+            tiles.push(SpriteTile {
+                x: tx + 0,
+                y: ty + 0,
+                id: i * 4 + 0,
+                flags: 0,
+                pal: 3,
+                scale: 1,
+            });
+            tiles.push(SpriteTile {
+                x: tx + 8,
+                y: ty + 0,
+                id: i * 4 + 1,
+                flags: 0,
+                pal: 3,
+                scale: 1,
+            });
+            tiles.push(SpriteTile {
+                x: tx + 0,
+                y: ty + 8,
+                id: i * 4 + 2,
+                flags: 0,
+                pal: 3,
+                scale: 1,
+            });
+            tiles.push(SpriteTile {
+                x: tx + 8,
+                y: ty + 8,
+                id: i * 4 + 3,
+                flags: 0,
+                pal: 3,
+                scale: 1,
+            });
         }
-
 
         let instance_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
             label: Some("shader_quad instance buffer"),
@@ -108,7 +133,11 @@ impl TilemapShaderPipeline {
         });
 
         let mut palette = image::open("assets/palette.png").unwrap().to_rgba32f();
-        palette.as_flat_samples_mut().samples.into_iter().for_each(|c| *c = c.powf(2.2));
+        palette
+            .as_flat_samples_mut()
+            .samples
+            .into_iter()
+            .for_each(|c| *c = c.powf(2.2));
         let palette_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
             label: Some("shader_quad palette buffer"),
             contents: bytemuck::cast_slice(&palette.as_flat_samples().samples),
@@ -132,16 +161,20 @@ impl TilemapShaderPipeline {
         let bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
             label: Some("shader_quad bind group"),
             layout: &bind_group_layout,
-            entries: &[wgpu::BindGroupEntry {
-                binding: 0,
-                resource: palette_buffer.as_entire_binding(),
-            }, wgpu::BindGroupEntry {
-                binding: 1,
-                resource: graphics_buffer.as_entire_binding(),
-            }, wgpu::BindGroupEntry {
-                binding: 2,
-                resource: uniform_buffer.as_entire_binding(),
-            }],
+            entries: &[
+                wgpu::BindGroupEntry {
+                    binding: 0,
+                    resource: palette_buffer.as_entire_binding(),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 1,
+                    resource: graphics_buffer.as_entire_binding(),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 2,
+                    resource: uniform_buffer.as_entire_binding(),
+                },
+            ],
         });
 
         Self {
@@ -156,7 +189,6 @@ impl TilemapShaderPipeline {
     }
 
     fn update(&mut self, queue: &wgpu::Queue, uniforms: &Uniforms) {
-        println!("{:?}", uniforms);
         queue.write_buffer(&self.uniform_buffer, 0, bytemuck::bytes_of(uniforms));
     }
 
@@ -362,8 +394,9 @@ impl TilemapWithControls {
         container(
             column![
                 shader_element(&self.tilemap_program)
-                    .width(512).height(iced::Length::Fill),
-                    //.width(512).height(512),
+                    .width(512)
+                    .height(iced::Length::Fill),
+                //.width(512).height(512),
                 shader_controls,
             ]
             .align_items(Alignment::Center),
