@@ -8,11 +8,8 @@ use iced::{
     advanced::Shell,
     event::Status,
     mouse::{self, Cursor},
-    widget::{
-        column, container,
-        shader::{self, wgpu, wgpu::util::DeviceExt, Event, Viewport},
-    },
-    Alignment, Element, Length, Rectangle,
+    widget::shader::{self, wgpu, wgpu::util::DeviceExt, Event, Viewport},
+    Element, Rectangle,
 };
 
 // We have to alias the shader element because it has the same name as the iced::widget::shader module, and the `self` syntax only imports the module.
@@ -322,13 +319,10 @@ impl Tilemap {
     }
 
     pub fn view(&self) -> Element<Message> {
-        container(
-            column![shader_element(&self.tilemap_program)
-                .width(512)
-                .height(Length::Fill)]
-            .align_x(Alignment::Center),
-        )
-        .into()
+        shader_element(&self.tilemap_program)
+            .width(256)
+            .height(128)
+            .into()
     }
 }
 struct TilemapProgram {
