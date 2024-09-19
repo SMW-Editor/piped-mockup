@@ -196,7 +196,6 @@ impl TilemapShaderPipeline {
     fn write_uniforms(&mut self, queue: &wgpu::Queue, uniforms: &Uniforms) {
         queue.write_buffer(&self.uniform_buffer, 0, bytemuck::bytes_of(uniforms));
     }
-    
 
     fn render(
         &self,
@@ -253,7 +252,10 @@ pub struct TilemapPrimitive {
 
 impl TilemapPrimitive {
     fn new(tilemap_bytes: Arc<Vec<u8>>, state: TilemapState) -> Self {
-        Self { tilemap_bytes, state }
+        Self {
+            tilemap_bytes,
+            state,
+        }
     }
 }
 
@@ -280,11 +282,7 @@ impl shader::Primitive for TilemapPrimitive {
         */
         let mut pipeline = self.state.pipeline.write().unwrap();
         let pipeline = pipeline.get_or_insert_with(|| {
-            TilemapShaderPipeline::new(
-                self.tilemap_bytes.clone(),
-                device,
-                format
-            )
+            TilemapShaderPipeline::new(self.tilemap_bytes.clone(), device, format)
         });
         pipeline.write_uniforms(
             queue,
@@ -303,8 +301,12 @@ impl shader::Primitive for TilemapPrimitive {
         clip_bounds: &Rectangle<u32>,
     ) {
         //let pipeline = storage.get::<TilemapShaderPipeline>().unwrap();
-        self.state.pipeline.read().unwrap()
-            .as_ref().unwrap()
+        self.state
+            .pipeline
+            .read()
+            .unwrap()
+            .as_ref()
+            .unwrap()
             .render(target, encoder, *clip_bounds);
     }
 }
@@ -336,7 +338,10 @@ struct TilemapProgram {
 
 impl TilemapProgram {
     fn new(tilemap_bytes: Arc<Vec<u8>>) -> Self {
-        Self { tilemap_bytes, state: Default::default(), }
+        Self {
+            tilemap_bytes,
+            state: Default::default(),
+        }
     }
 }
 
