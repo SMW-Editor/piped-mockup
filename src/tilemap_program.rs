@@ -99,23 +99,23 @@ impl TilemapShaderPipeline {
             let tx = i % 8 * 16;
             let ty = i / 8 * 16;
             tiles.push(SpriteTile {
-                x: tx + 0,
-                y: ty + 0,
-                id: i * 4 + 0,
+                x: tx,
+                y: ty,
+                id: i * 4,
                 flags: 0,
                 pal: 3,
                 scale: 1,
             });
             tiles.push(SpriteTile {
                 x: tx + 8,
-                y: ty + 0,
+                y: ty,
                 id: i * 4 + 1,
                 flags: 0,
                 pal: 3,
                 scale: 1,
             });
             tiles.push(SpriteTile {
-                x: tx + 0,
+                x: tx,
                 y: ty + 8,
                 id: i * 4 + 2,
                 flags: 0,
@@ -142,11 +142,11 @@ impl TilemapShaderPipeline {
         palette
             .as_flat_samples_mut()
             .samples
-            .into_iter()
+            .iter_mut()
             .for_each(|c| *c = c.powf(2.2));
         let palette_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
             label: Some("shader_quad palette buffer"),
-            contents: bytemuck::cast_slice(&palette.as_flat_samples().samples),
+            contents: bytemuck::cast_slice(palette.as_flat_samples().samples),
             usage: wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_DST,
         });
 
@@ -265,7 +265,7 @@ impl shader::Primitive for TilemapPrimitive {
         device: &wgpu::Device,
         queue: &wgpu::Queue,
         format: wgpu::TextureFormat,
-        storage: &mut shader::Storage,
+        _storage: &mut shader::Storage,
         bounds: &Rectangle,
         _viewport: &Viewport,
     ) {
@@ -296,7 +296,7 @@ impl shader::Primitive for TilemapPrimitive {
     fn render(
         &self,
         encoder: &mut wgpu::CommandEncoder,
-        storage: &shader::Storage,
+        _storage: &shader::Storage,
         target: &wgpu::TextureView,
         clip_bounds: &Rectangle<u32>,
     ) {
