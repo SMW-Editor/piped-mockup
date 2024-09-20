@@ -7,7 +7,7 @@ edition = "2021"
 lto = "off"
 
 [dependencies]
-iced = { version = "0.13.0", features = [
+iced = { version = "0.13.1", features = [
     "advanced",
     "debug",
     "image",

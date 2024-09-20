@@ -1,0 +1,56 @@
+{
+  // Use IntelliSense to learn about possible attributes.
+  // Hover to view descriptions of existing attributes.
+  // For more information, visit: https://go.microsoft.com/fwlink/?linkid=830387
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "type": "lldb",
+      "request": "launch",
+      "name": "Cargo launch",
+      "cargo": {
+        "args": ["build", "--bin=piped-mockup"]
+      },
+      "program": "${cargo:program}",
+      "args": []
+    }
+
+    // {
+    //     "type": "lldb",
+    //     "request": "launch",
+    //     "name": "Debug executable 'piped-mockup'",
+    //     "cargo": {
+    //         "args": [
+    //             "build",
+    //             "--bin=piped-mockup",
+    //             "--package=piped-mockup"
+    //         ],
+    //         "filter": {
+    //             "name": "piped-mockup",
+    //             "kind": "bin"
+    //         }
+    //     },
+    //     "args": [],
+    //     "cwd": "${workspaceFolder}"
+    // },
+    // {
+    //     "type": "lldb",
+    //     "request": "launch",
+    //     "name": "Debug unit tests in executable 'piped-mockup'",
+    //     "cargo": {
+    //         "args": [
+    //             "test",
+    //             "--no-run",
+    //             "--bin=piped-mockup",
+    //             "--package=piped-mockup"
+    //         ],
+    //         "filter": {
+    //             "name": "piped-mockup",
+    //             "kind": "bin"
+    //         }
+    //     },
+    //     "args": [],
+    //     "cwd": "${workspaceFolder}"
+    // }
+  ]
+}

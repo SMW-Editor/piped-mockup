@@ -6,8 +6,10 @@ use tilemap_program::Tilemap;
 
 use iced::{
     application,
-    widget::{button, column, container, horizontal_rule, image, row, vertical_rule, Space},
-    window, Alignment, Element, Length, Settings, Task, Theme,
+    widget::{
+        button, column, container, horizontal_rule, image, mouse_area, row, vertical_rule, Space,
+    },
+    window, Alignment, Element, Length, Point, Settings, Task, Theme,
 };
 
 fn main() -> iced::Result {
@@ -35,6 +37,8 @@ enum Message {
     TilemapMessage(tilemap_program::Message),
     TilemapLoaded(Option<(PathBuf, Arc<Vec<u8>>)>),
     SelectTilemap((PathBuf, Arc<Vec<u8>>)),
+    MouseMovedInPalette(Point),
+    MousePressedInPalette,
 }
 impl App {
     fn new() -> (Self, Task<Message>) {
@@ -79,6 +83,14 @@ impl App {
                 self.tilemap = Some(Tilemap::new(bytes));
                 Task::none()
             }
+            Message::MouseMovedInPalette(point) => {
+                println!("Moved in palette {:?}", point);
+                Task::none()
+            }
+            Message::MousePressedInPalette => {
+                println!("Clicked palette");
+                Task::none()
+            }
             _ => Task::none(),
         }
     }
@@ -100,12 +112,14 @@ impl App {
                     horizontal_rule(2),
                     heading("Palette"),
                     Space::with_height(Length::FillPortion(1)),
-                    Element::from(
+                    mouse_area(
                         image(format!("{}/assets/palette.png", env!("CARGO_MANIFEST_DIR")))
                             .filter_method(image::FilterMethod::Nearest)
-                            .width(Length::Fill)
+                            .width(100)
                             .height(100)
-                    ),
+                    )
+                    .on_move(Message::MouseMovedInPalette)
+                    .on_press(Message::MousePressedInPalette),
                     Space::with_height(Length::FillPortion(1)),
                 ]
                 .align_x(Alignment::Center)
