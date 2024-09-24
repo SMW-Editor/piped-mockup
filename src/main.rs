@@ -1,8 +1,10 @@
 mod tilemap_program;
+mod palette_program;
 
 use std::{path::PathBuf, sync::Arc};
 
 use tilemap_program::Tilemap;
+use palette_program::Palette;
 
 use iced::{
     application,
@@ -28,6 +30,7 @@ fn main() -> iced::Result {
 
 struct App {
     tilemap: Option<Tilemap>,
+    palette: Palette,
     loaded_tilemaps: Vec<(PathBuf, Arc<Vec<u8>>)>,
 }
 
@@ -35,6 +38,7 @@ struct App {
 #[derive(Debug, Clone)]
 enum Message {
     TilemapMessage(tilemap_program::Message),
+    PaletteMessage(palette_program::Message),
     TilemapLoaded(Option<(PathBuf, Arc<Vec<u8>>)>),
     SelectTilemap((PathBuf, Arc<Vec<u8>>)),
     MouseMovedInPalette(Point),
@@ -45,6 +49,7 @@ impl App {
         (
             App {
                 tilemap: None,
+                palette: Palette::new(),
                 loaded_tilemaps: vec![],
             },
             Task::batch([
@@ -88,7 +93,7 @@ impl App {
                 Task::none()
             }
             Message::MousePressedInPalette => {
-                println!("Clicked palette");
+                println!("Clicked palette row");
                 Task::none()
             }
             _ => Task::none(),
@@ -113,10 +118,7 @@ impl App {
                     heading("Palette"),
                     Space::with_height(Length::FillPortion(1)),
                     mouse_area(
-                        image(format!("{}/assets/palette.png", env!("CARGO_MANIFEST_DIR")))
-                            .filter_method(image::FilterMethod::Nearest)
-                            .width(100)
-                            .height(100)
+                        Element::map(self.palette.view(), Message::PaletteMessage),
                     )
                     .on_move(Message::MouseMovedInPalette)
                     .on_press(Message::MousePressedInPalette),
