@@ -24,10 +24,10 @@ pub enum Message {
     CursorMoved(Point),
 }
 impl Component {
-    pub fn new(tilemap_bytes_arc: Arc<Vec<u8>>) -> Self {
+    pub fn new(graphics_bytes_arc: Arc<Vec<u8>>) -> Self {
         Self {
             program: Program {
-                tilemap_bytes_arc,
+                graphics_bytes_arc,
                 lazy_pipeline_arc: Default::default(),
             },
         }
@@ -39,7 +39,7 @@ impl Component {
 }
 
 struct Program {
-    tilemap_bytes_arc: Arc<Vec<u8>>,
+    graphics_bytes_arc: Arc<Vec<u8>>,
     lazy_pipeline_arc: LazyPipelineArc,
 }
 impl shader::Program<Message> for Program {
@@ -72,7 +72,7 @@ impl shader::Program<Message> for Program {
 
     fn draw(&self, _: &Self::State, _: mouse::Cursor, _: Rectangle) -> Self::Primitive {
         FrameInfo::new(
-            self.tilemap_bytes_arc.clone(),
+            self.graphics_bytes_arc.clone(),
             self.lazy_pipeline_arc.clone(),
         )
     }
@@ -99,13 +99,13 @@ pub struct TileInstance {
 /// Created every frame, and has the ability to set stuff on the pipeline.
 #[derive(Debug)]
 pub struct FrameInfo {
-    tilemap_bytes: Arc<Vec<u8>>,
+    graphics_bytes_arc: Arc<Vec<u8>>,
     lazy_pipeline_arc: LazyPipelineArc,
 }
 impl FrameInfo {
-    fn new(tilemap_bytes: Arc<Vec<u8>>, state: LazyPipelineArc) -> Self {
+    fn new(graphics_bytes_arc: Arc<Vec<u8>>, state: LazyPipelineArc) -> Self {
         Self {
-            tilemap_bytes,
+            graphics_bytes_arc,
             lazy_pipeline_arc: state,
         }
     }
@@ -125,7 +125,7 @@ impl shader::Primitive for FrameInfo {
         // our own component state.
         if !storage.has::<TilemapShaderPipeline>() {
             storage.store(TilemapShaderPipeline::new(
-                self.tilemap_bytes.clone(),
+                self.graphics_bytes_arc.clone(),
                 device,
                 format,
             ));
@@ -135,7 +135,7 @@ impl shader::Primitive for FrameInfo {
         let mut pipeline_rw = self.lazy_pipeline_arc.write().unwrap();
         let pipeline = pipeline_rw.get_or_insert_with(|| {
             TilemapShaderPipeline::new_and_create_wgpu_pipeline(
-                self.tilemap_bytes.clone(),
+                self.graphics_bytes_arc.clone(),
                 device,
                 format,
             )
@@ -182,7 +182,7 @@ struct TilemapShaderPipeline {
 }
 impl TilemapShaderPipeline {
     fn new_and_create_wgpu_pipeline(
-        tilemap_bytes: Arc<Vec<u8>>,
+        graphics_bytes_arc: Arc<Vec<u8>>,
         device: &wgpu::Device,
         format: wgpu::TextureFormat,
     ) -> Self {
@@ -285,7 +285,7 @@ impl TilemapShaderPipeline {
 
         let graphics_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
             label: Some("shader_quad graphics buffer"),
-            contents: &tilemap_bytes,
+            contents: &graphics_bytes_arc,
             usage: wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_DST,
         });
         let uniform_buffer = device.create_buffer(&wgpu::BufferDescriptor {

@@ -26,19 +26,19 @@ fn main() -> iced::Result {
 }
 
 struct App {
-    displayed_tilemap: Option<tilemap::Component>,
-    palette: Palette,
-    tilemap_files: Vec<(PathBuf, Arc<Vec<u8>>)>,
+    displayed_graphics_file_component: Option<tilemap::Component>,
+    palette_selector: Palette,
+    graphics_files: Vec<(PathBuf, Arc<Vec<u8>>)>,
 }
 
 #[allow(clippy::enum_variant_names)]
 #[allow(dead_code)]
 #[derive(Debug, Clone)]
 enum Message {
-    FromDisplayedTilemap(tilemap::Message),
-    FromPalette(palette_program::Message),
-    TilemapFileLoaded(Option<(PathBuf, Arc<Vec<u8>>)>),
-    DisplayTilemapFile((PathBuf, Arc<Vec<u8>>)),
+    FromDisplayedGraphicsFile(tilemap::Message),
+    FromPaletteSelector(palette_program::Message),
+    GraphicsFileLoaded(Option<(PathBuf, Arc<Vec<u8>>)>),
+    DisplayGraphicsFile((PathBuf, Arc<Vec<u8>>)),
     MouseMovedOverPalette(Point),
     MousePressedOverPalette,
 }
@@ -46,9 +46,9 @@ impl App {
     fn new() -> (Self, Task<Message>) {
         (
             App {
-                displayed_tilemap: None,
-                palette: Palette::new(),
-                tilemap_files: vec![],
+                displayed_graphics_file_component: None,
+                palette_selector: Palette::new(),
+                graphics_files: vec![],
             },
             Task::batch([
                 Task::perform(
@@ -56,37 +56,39 @@ impl App {
                         "{}/assets/global.bin",
                         env!("CARGO_MANIFEST_DIR")
                     ))),
-                    Message::TilemapFileLoaded,
+                    Message::GraphicsFileLoaded,
                 ),
                 Task::perform(
                     load_file(PathBuf::from(format!(
                         "{}/assets/grass.bin",
                         env!("CARGO_MANIFEST_DIR")
                     ))),
-                    Message::TilemapFileLoaded,
+                    Message::GraphicsFileLoaded,
                 ),
             ]),
         )
     }
     fn update(&mut self, message: Message) -> Task<Message> {
         match message {
-            Message::TilemapFileLoaded(Some((path, bytes))) => {
-                println!("loaded {path:?}, {:?} bytes", bytes.len());
-                self.tilemap_files.push((path, bytes.clone()));
+            Message::GraphicsFileLoaded(Some((path, graphics_bytes))) => {
+                println!("loaded {path:?}, {:?} bytes", graphics_bytes.len());
+                self.graphics_files.push((path, graphics_bytes.clone()));
 
-                // Choose the first loaded tilemap to display.
-                if self.tilemap_files.len() == 1 {
-                    self.displayed_tilemap = Some(tilemap::Component::new(bytes));
+                // Choose the first loaded graphics file to display.
+                if self.graphics_files.len() == 1 {
+                    self.displayed_graphics_file_component =
+                        Some(tilemap::Component::new(graphics_bytes));
                 }
 
                 Task::none()
             }
-            Message::DisplayTilemapFile((_path, bytes)) => {
-                self.displayed_tilemap = Some(tilemap::Component::new(bytes));
+            Message::DisplayGraphicsFile((_path, graphics_bytes)) => {
+                self.displayed_graphics_file_component =
+                    Some(tilemap::Component::new(graphics_bytes));
                 Task::none()
             }
-            Message::FromDisplayedTilemap(tilemap::Message::CursorMoved(_pos)) => Task::none(),
-            Message::FromPalette(_) => Task::none(),
+            Message::FromDisplayedGraphicsFile(tilemap::Message::CursorMoved(_pos)) => Task::none(),
+            Message::FromPaletteSelector(_) => Task::none(),
             Message::MouseMovedOverPalette(point) => {
                 println!("Moved in palette {:?}", point);
                 Task::none()
@@ -116,29 +118,32 @@ impl App {
                     horizontal_rule(2),
                     heading("Palette"),
                     Space::with_height(Length::FillPortion(1)),
-                    mouse_area(Element::map(self.palette.view(), Message::FromPalette),)
-                        .on_move(Message::MouseMovedOverPalette)
-                        .on_press(Message::MousePressedOverPalette),
+                    mouse_area(Element::map(
+                        self.palette_selector.view(),
+                        Message::FromPaletteSelector
+                    ),)
+                    .on_move(Message::MouseMovedOverPalette)
+                    .on_press(Message::MousePressedOverPalette),
                     Space::with_height(Length::FillPortion(1)),
                 ]
                 .align_x(Alignment::Center)
                 .width(Length::FillPortion(1)),
                 vertical_rule(2),
                 column![
-                    heading("Tile Library"),
+                    heading("Graphics File Library"),
                     Space::with_height(Length::FillPortion(1)),
-                    self.displayed_tilemap.as_ref().map_or_else(
+                    self.displayed_graphics_file_component.as_ref().map_or_else(
                         || container(column![]),
-                        |displayed_tilemap| container(Element::map(
-                            displayed_tilemap.view(),
-                            Message::FromDisplayedTilemap
+                        |displayed_graphics_file_component| container(Element::map(
+                            displayed_graphics_file_component.view(),
+                            Message::FromDisplayedGraphicsFile
                         ))
                     ),
                     Space::with_height(Length::Fixed(10.)),
-                    column(self.tilemap_files.iter().map(|tilemap| {
-                        button(tilemap.0.file_name().unwrap().to_str().unwrap())
+                    column(self.graphics_files.iter().map(|file| {
+                        button(file.0.file_name().unwrap().to_str().unwrap())
                             .style(button::secondary)
-                            .on_press(Message::DisplayTilemapFile(tilemap.clone()))
+                            .on_press(Message::DisplayGraphicsFile(file.clone()))
                             .into()
                     }))
                     .spacing(10)
