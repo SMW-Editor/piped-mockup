@@ -7,9 +7,7 @@ use palette_program::Palette;
 
 use iced::{
     application,
-    widget::{
-        button, column, container, horizontal_rule, image, mouse_area, row, vertical_rule, Space,
-    },
+    widget::{button, column, container, horizontal_rule, mouse_area, row, vertical_rule, Space},
     window, Alignment, Element, Length, Point, Settings, Task, Theme,
 };
 
@@ -34,6 +32,7 @@ struct App {
 }
 
 #[allow(clippy::enum_variant_names)]
+#[allow(dead_code)]
 #[derive(Debug, Clone)]
 enum Message {
     FromDisplayedTilemap(tilemap::Message),
@@ -71,7 +70,6 @@ impl App {
     }
     fn update(&mut self, message: Message) -> Task<Message> {
         match message {
-            Message::FromDisplayedTilemap(tilemap::Message::CursorMoved(_pos)) => Task::none(),
             Message::TilemapFileLoaded(Some((path, bytes))) => {
                 println!("loaded {path:?}, {:?} bytes", bytes.len());
                 self.tilemap_files.push((path, bytes.clone()));
@@ -87,6 +85,8 @@ impl App {
                 self.displayed_tilemap = Some(tilemap::Component::new(bytes));
                 Task::none()
             }
+            Message::FromDisplayedTilemap(tilemap::Message::CursorMoved(_pos)) => Task::none(),
+            Message::FromPalette(_) => Task::none(),
             Message::MouseMovedOverPalette(point) => {
                 println!("Moved in palette {:?}", point);
                 Task::none()

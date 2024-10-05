@@ -22,29 +22,15 @@ pub struct Uniforms {
     padding: u32,
 }
 
-#[derive(Copy, Clone, Debug, bytemuck::Pod, bytemuck::Zeroable)]
-#[repr(C)]
-pub struct SpriteTile {
-    x: u32,
-    y: u32,
-    id: u32,
-    pal: u8,
-    scale: u8,
-    flags: u16,
-}
-
 #[derive(Debug)]
 struct PaletteShaderPipeline {
     pipeline: wgpu::RenderPipeline,
-    palette_buffer: wgpu::Buffer,
+    _palette_buffer: wgpu::Buffer,
     bind_group: wgpu::BindGroup,
 }
 
 impl PaletteShaderPipeline {
-    fn new(
-        device: &wgpu::Device,
-        format: wgpu::TextureFormat,
-    ) -> Self {
+    fn new(device: &wgpu::Device, format: wgpu::TextureFormat) -> Self {
         let shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
             label: Some("PaletteShaderPipeline shader"),
             source: wgpu::ShaderSource::Wgsl(std::borrow::Cow::Borrowed(include_str!(
@@ -84,7 +70,7 @@ impl PaletteShaderPipeline {
             .samples
             .iter_mut()
             .for_each(|c| *c = c.powf(2.2));
-        let palette_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+        let _palette_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
             label: Some("shader_quad palette buffer"),
             contents: bytemuck::cast_slice(palette.as_flat_samples().samples),
             usage: wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_DST,
@@ -93,23 +79,20 @@ impl PaletteShaderPipeline {
         let bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
             label: Some("shader_quad bind group"),
             layout: &bind_group_layout,
-            entries: &[
-                wgpu::BindGroupEntry {
-                    binding: 0,
-                    resource: palette_buffer.as_entire_binding(),
-                },
-            ],
+            entries: &[wgpu::BindGroupEntry {
+                binding: 0,
+                resource: _palette_buffer.as_entire_binding(),
+            }],
         });
 
         Self {
             pipeline,
-            palette_buffer,
+            _palette_buffer,
             bind_group,
         }
     }
 
-    fn write_uniforms(&mut self, queue: &wgpu::Queue, uniforms: &Uniforms) {
-    }
+    fn write_uniforms(&mut self, _queue: &wgpu::Queue, _uniforms: &Uniforms) {}
 
     fn render(
         &self,
@@ -147,6 +130,7 @@ impl PaletteShaderPipeline {
     }
 }
 
+#[allow(dead_code)]
 #[derive(Debug, Clone, Copy)]
 pub enum Message {
     CursorMoved(Point),
@@ -164,9 +148,7 @@ pub struct PalettePrimitive {
 
 impl PalettePrimitive {
     fn new(state: PaletteState) -> Self {
-        Self {
-            state,
-        }
+        Self { state }
     }
 }
 
@@ -192,9 +174,7 @@ impl shader::Primitive for PalettePrimitive {
         let pipeline = storage.get_mut::<PaletteShaderPipeline>().unwrap();
         */
         let mut pipeline = self.state.pipeline.write().unwrap();
-        let pipeline = pipeline.get_or_insert_with(|| {
-            PaletteShaderPipeline::new(device, format)
-        });
+        let pipeline = pipeline.get_or_insert_with(|| PaletteShaderPipeline::new(device, format));
         pipeline.write_uniforms(
             queue,
             &Uniforms {
