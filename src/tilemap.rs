@@ -148,7 +148,7 @@ impl shader::Primitive for TilemapPrimitive {
         pipeline.write_uniforms(
             queue,
             &Uniforms {
-                resolution: Vec2::new(bounds.width as f32, bounds.height as f32),
+                resolution: Vec2::new(bounds.width, bounds.height),
                 padding: 0,
             },
         );
