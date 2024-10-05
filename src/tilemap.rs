@@ -179,14 +179,14 @@ impl TilemapShaderPipeline {
         format: wgpu::TextureFormat,
     ) -> Self {
         let shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
-            label: Some("TilemapShaderPipeline shader"),
+            label: Some("tilemap shader module"),
             source: wgpu::ShaderSource::Wgsl(std::borrow::Cow::Borrowed(include_str!(
                 "tilemap_shader.wgsl"
             ))),
         });
 
         let pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
-            label: Some("TilemapShaderPipeline"),
+            label: Some("tilemap shader pipeline"),
             layout: None,
             vertex: wgpu::VertexState {
                 module: &shader,
@@ -258,7 +258,7 @@ impl TilemapShaderPipeline {
         }
 
         let instance_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
-            label: Some("shader_quad instance buffer"),
+            label: Some("tilemap instance buffer"),
             contents: bytemuck::cast_slice(&tile_instances),
             usage: wgpu::BufferUsages::VERTEX,
         });
@@ -270,18 +270,18 @@ impl TilemapShaderPipeline {
             .iter_mut()
             .for_each(|c| *c = c.powf(2.2));
         let palette_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
-            label: Some("shader_quad palette buffer"),
+            label: Some("tilemap palette buffer"),
             contents: bytemuck::cast_slice(palette.as_flat_samples().samples),
             usage: wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_DST,
         });
 
         let graphics_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
-            label: Some("shader_quad graphics buffer"),
+            label: Some("tilemap graphics buffer"),
             contents: &graphics_bytes_arc,
             usage: wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_DST,
         });
         let uniform_buffer = device.create_buffer(&wgpu::BufferDescriptor {
-            label: Some("shader_quad uniform buffer"),
+            label: Some("tilemap uniform buffer"),
             size: std::mem::size_of::<Uniforms>() as _,
             usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
             mapped_at_creation: false,
@@ -289,7 +289,7 @@ impl TilemapShaderPipeline {
 
         let bind_group_layout = pipeline.get_bind_group_layout(0);
         let bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
-            label: Some("shader_quad bind group"),
+            label: Some("tilemap bind group"),
             layout: &bind_group_layout,
             entries: &[
                 wgpu::BindGroupEntry {
@@ -329,7 +329,7 @@ impl TilemapShaderPipeline {
         clip_bounds: Rectangle<u32>,
     ) {
         let mut pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
-            label: Some("fill color test"),
+            label: Some("tilemap render pass"),
             color_attachments: &[Some(wgpu::RenderPassColorAttachment {
                 view: target,
                 resolve_target: None,
