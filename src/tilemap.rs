@@ -12,68 +12,50 @@ use iced::{
     Element, Rectangle,
 };
 
-// We have to alias the shader element because it has the same name as the iced::widget::shader module, and the `self` syntax only imports the module.
+// We have to alias the shader element because it has the same name as the iced::widget::shader
+// module, and the `self` syntax only imports the module.
 use iced::widget::shader as shader_element;
 
 pub struct Component {
-    tilemap_program: TilemapProgram,
+    program: Program,
 }
 #[derive(Debug, Clone, Copy)]
 pub enum Message {
     CursorMoved(Point),
 }
 impl Component {
-    pub fn new(bytes: Arc<Vec<u8>>) -> Self {
+    pub fn new(tilemap_bytes_arc: Arc<Vec<u8>>) -> Self {
         Self {
-            tilemap_program: TilemapProgram::new(bytes),
+            program: Program {
+                tilemap_bytes_arc,
+                lazy_pipeline_arc: Default::default(),
+            },
         }
     }
 
     pub fn view(&self) -> Element<Message> {
-        shader_element(&self.tilemap_program)
-            .width(256)
-            .height(128)
-            .into()
-    }
-}
-struct TilemapProgram {
-    tilemap_bytes: Arc<Vec<u8>>,
-    state: TilemapState,
-}
-#[derive(Default, Debug, Clone)]
-pub struct TilemapState {
-    pipeline: Arc<RwLock<Option<TilemapShaderPipeline>>>,
-}
-
-impl TilemapProgram {
-    fn new(tilemap_bytes: Arc<Vec<u8>>) -> Self {
-        Self {
-            tilemap_bytes,
-            state: Default::default(),
-        }
+        shader_element(&self.program).width(256).height(128).into()
     }
 }
 
-impl shader::Program<Message> for TilemapProgram {
+struct Program {
+    tilemap_bytes_arc: Arc<Vec<u8>>,
+    lazy_pipeline_arc: LazyPipelineArc,
+}
+impl shader::Program<Message> for Program {
+    // This State type is what Iced puts in its widget tree, and passed to the update and draw
+    // functions. We aren't using it, as it is initialized using Default, and for now we want to
+    // manage our state ourselves in the app model.
     type State = ();
-    type Primitive = TilemapPrimitive;
-
-    fn draw(
-        &self,
-        _state: &Self::State,
-        _cursor: mouse::Cursor,
-        _bounds: Rectangle,
-    ) -> Self::Primitive {
-        TilemapPrimitive::new(self.tilemap_bytes.clone(), self.state.clone())
-    }
+    type Primitive = FrameInfo;
 
     fn update(
         &self,
-        _state: &mut Self::State,
+        _: &mut Self::State,
         event: Event,
         bounds: Rectangle,
         cursor: Cursor,
-        _shell: &mut Shell<'_, Message>,
+        _: &mut Shell<'_, Message>,
     ) -> (Status, Option<Message>) {
         #[allow(clippy::single_match)]
         match event {
@@ -86,6 +68,13 @@ impl shader::Program<Message> for TilemapProgram {
         };
 
         (Status::Ignored, None)
+    }
+
+    fn draw(&self, _: &Self::State, _: mouse::Cursor, _: Rectangle) -> Self::Primitive {
+        FrameInfo::new(
+            self.tilemap_bytes_arc.clone(),
+            self.lazy_pipeline_arc.clone(),
+        )
     }
 }
 
@@ -107,20 +96,21 @@ pub struct TileInstance {
     flags: u16,
 }
 
+/// Created every frame, and has the ability to set stuff on the pipeline.
 #[derive(Debug)]
-pub struct TilemapPrimitive {
+pub struct FrameInfo {
     tilemap_bytes: Arc<Vec<u8>>,
-    state: TilemapState,
+    lazy_pipeline_arc: LazyPipelineArc,
 }
-impl TilemapPrimitive {
-    fn new(tilemap_bytes: Arc<Vec<u8>>, state: TilemapState) -> Self {
+impl FrameInfo {
+    fn new(tilemap_bytes: Arc<Vec<u8>>, state: LazyPipelineArc) -> Self {
         Self {
             tilemap_bytes,
-            state,
+            lazy_pipeline_arc: state,
         }
     }
 }
-impl shader::Primitive for TilemapPrimitive {
+impl shader::Primitive for FrameInfo {
     fn prepare(
         &self,
         device: &wgpu::Device,
@@ -131,6 +121,8 @@ impl shader::Primitive for TilemapPrimitive {
         _viewport: &Viewport,
     ) {
         /*
+        // This is how the Iced examples memoize the pipeline. We don't need that as we just use
+        // our own component state.
         if !storage.has::<TilemapShaderPipeline>() {
             storage.store(TilemapShaderPipeline::new(
                 self.tilemap_bytes.clone(),
@@ -138,12 +130,15 @@ impl shader::Primitive for TilemapPrimitive {
                 format,
             ));
         }
-
         let pipeline = storage.get_mut::<TilemapShaderPipeline>().unwrap();
         */
-        let mut pipeline = self.state.pipeline.write().unwrap();
-        let pipeline = pipeline.get_or_insert_with(|| {
-            TilemapShaderPipeline::new(self.tilemap_bytes.clone(), device, format)
+        let mut pipeline_rw = self.lazy_pipeline_arc.write().unwrap();
+        let pipeline = pipeline_rw.get_or_insert_with(|| {
+            TilemapShaderPipeline::new_and_create_wgpu_pipeline(
+                self.tilemap_bytes.clone(),
+                device,
+                format,
+            )
         });
         pipeline.write_uniforms(
             queue,
@@ -162,8 +157,7 @@ impl shader::Primitive for TilemapPrimitive {
         clip_bounds: &Rectangle<u32>,
     ) {
         //let pipeline = storage.get::<TilemapShaderPipeline>().unwrap();
-        self.state
-            .pipeline
+        self.lazy_pipeline_arc
             .read()
             .unwrap()
             .as_ref()
@@ -172,6 +166,10 @@ impl shader::Primitive for TilemapPrimitive {
     }
 }
 
+type LazyPipelineArc = Arc<RwLock<Option<TilemapShaderPipeline>>>;
+
+/// Created once then memoized. Creates the WGPU pipeline upon construction, and gives us
+/// continuing access to the WGPU pipeline later on.
 #[derive(Debug)]
 struct TilemapShaderPipeline {
     pipeline: wgpu::RenderPipeline,
@@ -183,7 +181,7 @@ struct TilemapShaderPipeline {
     bind_group: wgpu::BindGroup,
 }
 impl TilemapShaderPipeline {
-    fn new(
+    fn new_and_create_wgpu_pipeline(
         tilemap_bytes: Arc<Vec<u8>>,
         device: &wgpu::Device,
         format: wgpu::TextureFormat,
