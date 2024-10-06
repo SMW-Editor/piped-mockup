@@ -25,7 +25,7 @@ pub enum Message {
 }
 impl Component {
     pub fn new(
-        graphics_bytes_arc: Arc<Vec<u8>>,
+        graphics_bytes_arc: Arc<RwLock<Vec<u8>>>,
         tile_instances_arc: Arc<Vec<TileInstance>>,
     ) -> Self {
         Self {
@@ -37,13 +37,17 @@ impl Component {
         }
     }
 
+    pub fn set_tile_instances(&mut self, tile_instances_arc: Arc<Vec<TileInstance>>) {
+        self.program.tile_instances_arc = tile_instances_arc;
+    }
+
     pub fn view(&self) -> Element<Message> {
         shader_element(&self.program).width(256).height(128).into()
     }
 }
 
 struct Program {
-    graphics_bytes_arc: Arc<Vec<u8>>,
+    graphics_bytes_arc: Arc<RwLock<Vec<u8>>>,
     tile_instances_arc: Arc<Vec<TileInstance>>,
     lazy_pipeline_arc: LazyPipelineArc,
 }
@@ -105,7 +109,7 @@ pub struct TileInstance {
 /// Created every frame, and has the ability to set stuff on the pipeline.
 #[derive(Debug)]
 pub struct FrameInfo {
-    graphics_bytes_arc: Arc<Vec<u8>>,
+    graphics_bytes_arc: Arc<RwLock<Vec<u8>>>,
     tile_instances_arc: Arc<Vec<TileInstance>>,
     lazy_pipeline_arc: LazyPipelineArc,
 }
@@ -133,6 +137,10 @@ impl shader::Primitive for FrameInfo {
         */
         let mut pipeline_rw = self.lazy_pipeline_arc.write().unwrap();
         let pipeline = pipeline_rw.get_or_insert_with(|| {
+            println!(
+                "Creating pipeline, this many bytes total: {}",
+                self.graphics_bytes_arc.read().unwrap().len()
+            );
             TilemapShaderPipeline::new_and_create_wgpu_pipeline(
                 device,
                 format,
@@ -147,6 +155,7 @@ impl shader::Primitive for FrameInfo {
                 padding: 0,
             },
         );
+        pipeline.write_tile_instances_if_needed(device, queue, &self.tile_instances_arc);
     }
 
     fn render(
@@ -184,7 +193,7 @@ impl TilemapShaderPipeline {
     fn new_and_create_wgpu_pipeline(
         device: &wgpu::Device,
         format: wgpu::TextureFormat,
-        graphics_bytes_arc: Arc<Vec<u8>>,
+        graphics_bytes_arc: Arc<RwLock<Vec<u8>>>,
         tile_instances_arc: Arc<Vec<TileInstance>>,
     ) -> Self {
         let shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
@@ -231,7 +240,7 @@ impl TilemapShaderPipeline {
         let instance_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
             label: Some("tilemap instance buffer"),
             contents: bytemuck::cast_slice(&tile_instances_arc),
-            usage: wgpu::BufferUsages::VERTEX,
+            usage: wgpu::BufferUsages::VERTEX | wgpu::BufferUsages::COPY_DST,
         });
 
         let mut palette = image::open("assets/palette.png").unwrap().to_rgba32f();
@@ -248,7 +257,7 @@ impl TilemapShaderPipeline {
 
         let graphics_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
             label: Some("tilemap graphics buffer"),
-            contents: &graphics_bytes_arc,
+            contents: &graphics_bytes_arc.read().unwrap(),
             usage: wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_DST,
         });
         let uniform_buffer = device.create_buffer(&wgpu::BufferDescriptor {
@@ -291,6 +300,34 @@ impl TilemapShaderPipeline {
 
     fn write_uniforms(&mut self, queue: &wgpu::Queue, uniforms: &Uniforms) {
         queue.write_buffer(&self.uniform_buffer, 0, bytemuck::bytes_of(uniforms));
+    }
+
+    fn write_tile_instances_if_needed(
+        &mut self,
+        device: &wgpu::Device,
+        queue: &wgpu::Queue,
+        tile_instances_arc: &Arc<Vec<TileInstance>>,
+    ) {
+        if !Arc::ptr_eq(&self.tile_instances_arc, tile_instances_arc) {
+            if self.tile_instances_arc.len() != tile_instances_arc.len() {
+                println!("Tile instances buffer size changed, creating new one.");
+                let new_instance_buffer =
+                    device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+                        label: Some("tilemap instance buffer"),
+                        contents: bytemuck::cast_slice(&tile_instances_arc),
+                        usage: wgpu::BufferUsages::VERTEX | wgpu::BufferUsages::COPY_DST,
+                    });
+
+                self.instance_buffer = new_instance_buffer;
+                self.tile_instances_arc = tile_instances_arc.clone();
+            } else {
+                queue.write_buffer(
+                    &self.instance_buffer,
+                    0,
+                    bytemuck::cast_slice(tile_instances_arc),
+                );
+            }
+        }
     }
 
     fn render(
