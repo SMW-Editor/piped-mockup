@@ -31,7 +31,7 @@ fn main() -> iced::Result {
 struct App {
     displayed_graphics_file_component: Option<tilemap::Component>,
     palette_selector: Palette,
-    graphics_files: Vec<(PathBuf, Arc<Vec<u8>>, usize)>,
+    graphics_files: Vec<GraphicsFile>,
     all_graphics_bytes: Arc<RwLock<Vec<u8>>>,
 }
 
@@ -43,6 +43,7 @@ enum Message {
     FromPaletteSelector(palette_program::Message),
     GraphicsFileLoaded(Option<(PathBuf, Arc<Vec<u8>>)>),
     DisplayGraphicsFile(usize),
+    LoadMoreGraphicsFiles,
     MouseMovedOverPalette(Point),
     MousePressedOverPalette,
 }
@@ -70,6 +71,47 @@ impl App {
                     ))),
                     Message::GraphicsFileLoaded,
                 ),
+            ]),
+        )
+    }
+    fn update(&mut self, message: Message) -> Task<Message> {
+        match message {
+            Message::GraphicsFileLoaded(Some((path, bytes))) => {
+                println!("loaded {path:?}, {:?} bytes", bytes.len());
+                let file = GraphicsFile {
+                    path,
+                    bytes: bytes.clone(),
+                    offset_in_all_bytes: self.all_graphics_bytes.read().unwrap().len(),
+                };
+
+                if self.displayed_graphics_file_component.is_none() {
+                    self.displayed_graphics_file_component = Some(tilemap::Component::new(
+                        self.all_graphics_bytes.clone(),
+                        file.get_tile_instances(),
+                    ));
+                }
+
+                self.all_graphics_bytes
+                    .write()
+                    .unwrap()
+                    .extend(bytes.iter().cloned());
+                self.graphics_files.push(file);
+
+                Task::none()
+            }
+            Message::DisplayGraphicsFile(file_index) => {
+                let file = self.graphics_files.get(file_index).unwrap();
+                if let Some(tilemap_component) = self.displayed_graphics_file_component.as_mut() {
+                    tilemap_component.set_tile_instances(file.get_tile_instances());
+                } else {
+                    self.displayed_graphics_file_component = Some(tilemap::Component::new(
+                        self.all_graphics_bytes.clone(),
+                        file.get_tile_instances(),
+                    ));
+                }
+                Task::none()
+            }
+            Message::LoadMoreGraphicsFiles => Task::batch([
                 Task::perform(
                     load_file(PathBuf::from(format!(
                         "{}/assets/grass.bin",
@@ -92,48 +134,6 @@ impl App {
                     Message::GraphicsFileLoaded,
                 ),
             ]),
-        )
-    }
-    fn update(&mut self, message: Message) -> Task<Message> {
-        match message {
-            Message::GraphicsFileLoaded(Some((path, graphics_bytes))) => {
-                println!("loaded {path:?}, {:?} bytes", graphics_bytes.len());
-                let offset = self.all_graphics_bytes.read().unwrap().len();
-                self.graphics_files
-                    .push((path, graphics_bytes.clone(), offset));
-                self.all_graphics_bytes
-                    .write()
-                    .unwrap()
-                    .extend(graphics_bytes.iter().cloned());
-
-                // (temporary) Wait for all 5 files to load before creating pipeline etc so that we
-                // have the full graphics bytes vec.
-                if self.graphics_files.len() == 5 {
-                    println!("All files loaded");
-                    self.displayed_graphics_file_component = Some(tilemap::Component::new(
-                        self.all_graphics_bytes.clone(),
-                        get_tile_instances_for_graphics_file(&graphics_bytes, offset),
-                    ));
-                }
-
-                Task::none()
-            }
-            Message::DisplayGraphicsFile(file_index) => {
-                let (_path, graphics_bytes, offset) =
-                    self.graphics_files.get(file_index).unwrap().clone();
-                if let Some(tilemap_component) = self.displayed_graphics_file_component.as_mut() {
-                    tilemap_component.set_tile_instances(get_tile_instances_for_graphics_file(
-                        &graphics_bytes,
-                        offset,
-                    ));
-                } else {
-                    self.displayed_graphics_file_component = Some(tilemap::Component::new(
-                        self.all_graphics_bytes.clone(),
-                        get_tile_instances_for_graphics_file(&graphics_bytes, offset),
-                    ));
-                }
-                Task::none()
-            }
             Message::FromDisplayedGraphicsFile(tilemap::Message::CursorMoved(_pos)) => Task::none(),
             Message::FromPaletteSelector(_) => Task::none(),
             Message::MouseMovedOverPalette(point) => {
@@ -188,7 +188,7 @@ impl App {
                     ),
                     Space::with_height(Length::Fixed(10.)),
                     column(self.graphics_files.iter().enumerate().map(|(index, file)| {
-                        button(file.0.file_name().unwrap().to_str().unwrap())
+                        button(file.path.file_name().unwrap().to_str().unwrap())
                             .style(button::secondary)
                             .on_press(Message::DisplayGraphicsFile(index))
                             .into()
@@ -196,6 +196,11 @@ impl App {
                     .spacing(10)
                     .align_x(Alignment::Center),
                     Space::with_height(Length::FillPortion(1)),
+                    if self.graphics_files.len() < 5 {
+                        container(button("Load more").on_press(Message::LoadMoreGraphicsFiles))
+                    } else {
+                        container(column![])
+                    }
                 ]
                 .align_x(Alignment::Center)
                 .width(Length::FillPortion(1)),
@@ -211,51 +216,57 @@ impl App {
 }
 
 async fn load_file(path: PathBuf) -> Option<(PathBuf, Arc<Vec<u8>>)> {
-    let contents = tokio::fs::read(&path).await.ok()?;
-    Some((path, Arc::new(contents)))
+    tokio::fs::read(&path)
+        .await
+        .ok()
+        .map(|contents| (path, Arc::new(contents)))
 }
 
-fn get_tile_instances_for_graphics_file(
-    graphics_bytes_in_file: &Vec<u8>,
-    byte_offset_in_all_graphics: usize,
-) -> Arc<Vec<tilemap::TileInstance>> {
-    let tile_offset = (byte_offset_in_all_graphics as u32) / 32;
-    let mut tile_instances = vec![];
-    for i in 0..(graphics_bytes_in_file.len() / 64) as u32 {
-        let tx = i % 8 * 16;
-        let ty = i / 8 * 16;
-        tile_instances.push(tilemap::TileInstance {
-            x: tx,
-            y: ty,
-            id: tile_offset + i * 4,
-            pal: 3,
-            scale: 1,
-            flags: 0,
-        });
-        tile_instances.push(tilemap::TileInstance {
-            x: tx + 8,
-            y: ty,
-            id: tile_offset + i * 4 + 1,
-            pal: 3,
-            scale: 1,
-            flags: 0,
-        });
-        tile_instances.push(tilemap::TileInstance {
-            x: tx,
-            y: ty + 8,
-            id: tile_offset + i * 4 + 2,
-            pal: 3,
-            scale: 1,
-            flags: 0,
-        });
-        tile_instances.push(tilemap::TileInstance {
-            x: tx + 8,
-            y: ty + 8,
-            id: tile_offset + i * 4 + 3,
-            pal: 3,
-            scale: 1,
-            flags: 0,
-        });
+struct GraphicsFile {
+    path: PathBuf,
+    bytes: Arc<Vec<u8>>,
+    offset_in_all_bytes: usize,
+}
+impl GraphicsFile {
+    fn get_tile_instances(&self) -> Arc<Vec<tilemap::TileInstance>> {
+        let tile_offset = (self.offset_in_all_bytes as u32) / 32;
+        let mut tile_instances = vec![];
+        for i in 0..(self.bytes.len() / 64) as u32 {
+            let tx = i % 8 * 16;
+            let ty = i / 8 * 16;
+            tile_instances.push(tilemap::TileInstance {
+                x: tx,
+                y: ty,
+                id: tile_offset + i * 4,
+                pal: 3,
+                scale: 1,
+                flags: 0,
+            });
+            tile_instances.push(tilemap::TileInstance {
+                x: tx + 8,
+                y: ty,
+                id: tile_offset + i * 4 + 1,
+                pal: 3,
+                scale: 1,
+                flags: 0,
+            });
+            tile_instances.push(tilemap::TileInstance {
+                x: tx,
+                y: ty + 8,
+                id: tile_offset + i * 4 + 2,
+                pal: 3,
+                scale: 1,
+                flags: 0,
+            });
+            tile_instances.push(tilemap::TileInstance {
+                x: tx + 8,
+                y: ty + 8,
+                id: tile_offset + i * 4 + 3,
+                pal: 3,
+                scale: 1,
+                flags: 0,
+            });
+        }
+        Arc::new(tile_instances)
     }
-    Arc::new(tile_instances)
 }

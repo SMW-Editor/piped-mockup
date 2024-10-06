@@ -155,6 +155,7 @@ impl shader::Primitive for FrameInfo {
                 padding: 0,
             },
         );
+        pipeline.replace_graphics_buffer_if_needed(device, &self.graphics_bytes_arc);
         pipeline.write_tile_instances_if_needed(device, queue, &self.tile_instances_arc);
     }
 
@@ -184,8 +185,8 @@ struct TilemapShaderPipeline {
     tile_instances_arc: Arc<Vec<TileInstance>>,
     pipeline: wgpu::RenderPipeline,
     instance_buffer: wgpu::Buffer,
-    _palette_buffer: wgpu::Buffer,
-    _graphics_buffer: wgpu::Buffer,
+    palette_buffer: wgpu::Buffer,
+    graphics_buffer: wgpu::Buffer,
     uniform_buffer: wgpu::Buffer,
     bind_group: wgpu::BindGroup,
 }
@@ -292,14 +293,54 @@ impl TilemapShaderPipeline {
             tile_instances_arc,
             uniform_buffer,
             instance_buffer,
-            _palette_buffer: palette_buffer,
-            _graphics_buffer: graphics_buffer,
+            palette_buffer,
+            graphics_buffer,
             bind_group,
         }
     }
 
     fn write_uniforms(&mut self, queue: &wgpu::Queue, uniforms: &Uniforms) {
         queue.write_buffer(&self.uniform_buffer, 0, bytemuck::bytes_of(uniforms));
+    }
+
+    fn replace_graphics_buffer_if_needed(
+        &mut self,
+        device: &wgpu::Device,
+        graphics_bytes_rw: &RwLock<Vec<u8>>,
+    ) {
+        let graphics_bytes = graphics_bytes_rw.read().unwrap();
+        // Only updating if size changed for now, since we don't expect the graphics bytes to be edited
+        if self.graphics_buffer.size() != graphics_bytes.len() as _ {
+            println!("Graphics buffer size changed, creating new one.");
+            let new_graphics_buffer =
+                device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+                    label: Some("tilemap graphics buffer"),
+                    contents: &graphics_bytes,
+                    usage: wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_DST,
+                });
+            self.graphics_buffer = new_graphics_buffer;
+
+            let bind_group_layout = self.pipeline.get_bind_group_layout(0);
+            let bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
+                label: Some("tilemap bind group"),
+                layout: &bind_group_layout,
+                entries: &[
+                    wgpu::BindGroupEntry {
+                        binding: 0,
+                        resource: self.palette_buffer.as_entire_binding(),
+                    },
+                    wgpu::BindGroupEntry {
+                        binding: 1,
+                        resource: self.graphics_buffer.as_entire_binding(),
+                    },
+                    wgpu::BindGroupEntry {
+                        binding: 2,
+                        resource: self.uniform_buffer.as_entire_binding(),
+                    },
+                ],
+            });
+            self.bind_group = bind_group;
+        }
     }
 
     fn write_tile_instances_if_needed(
