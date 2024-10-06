@@ -97,15 +97,19 @@ impl App {
 
                 // Choose the first loaded graphics file to display.
                 if self.graphics_files.len() == 1 {
-                    self.displayed_graphics_file_component =
-                        Some(tilemap::Component::new(graphics_bytes));
+                    self.displayed_graphics_file_component = Some(tilemap::Component::new(
+                        graphics_bytes.clone(),
+                        get_tile_instances_for_graphics_file(graphics_bytes),
+                    ));
                 }
 
                 Task::none()
             }
             Message::DisplayGraphicsFile((_path, graphics_bytes)) => {
-                self.displayed_graphics_file_component =
-                    Some(tilemap::Component::new(graphics_bytes));
+                self.displayed_graphics_file_component = Some(tilemap::Component::new(
+                    graphics_bytes.clone(),
+                    get_tile_instances_for_graphics_file(graphics_bytes),
+                ));
                 Task::none()
             }
             Message::FromDisplayedGraphicsFile(tilemap::Message::CursorMoved(_pos)) => Task::none(),
@@ -187,4 +191,47 @@ impl App {
 async fn load_file(path: PathBuf) -> Option<(PathBuf, Arc<Vec<u8>>)> {
     let contents = tokio::fs::read(&path).await.ok()?;
     Some((path, Arc::new(contents)))
+}
+
+fn get_tile_instances_for_graphics_file(
+    graphics_bytes: Arc<Vec<u8>>,
+) -> Arc<Vec<tilemap::TileInstance>> {
+    let mut tile_instances = vec![];
+    for i in 0..(graphics_bytes.len() / 64) as u32 {
+        let tx = i % 8 * 16;
+        let ty = i / 8 * 16;
+        tile_instances.push(tilemap::TileInstance {
+            x: tx,
+            y: ty,
+            id: i * 4,
+            pal: 3,
+            scale: 1,
+            flags: 0,
+        });
+        tile_instances.push(tilemap::TileInstance {
+            x: tx + 8,
+            y: ty,
+            id: i * 4 + 1,
+            pal: 3,
+            scale: 1,
+            flags: 0,
+        });
+        tile_instances.push(tilemap::TileInstance {
+            x: tx,
+            y: ty + 8,
+            id: i * 4 + 2,
+            pal: 3,
+            scale: 1,
+            flags: 0,
+        });
+        tile_instances.push(tilemap::TileInstance {
+            x: tx + 8,
+            y: ty + 8,
+            id: i * 4 + 3,
+            pal: 3,
+            scale: 1,
+            flags: 0,
+        });
+    }
+    Arc::new(tile_instances)
 }

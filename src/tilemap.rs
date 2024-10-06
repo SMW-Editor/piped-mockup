@@ -24,10 +24,14 @@ pub enum Message {
     CursorMoved(Point),
 }
 impl Component {
-    pub fn new(graphics_bytes_arc: Arc<Vec<u8>>) -> Self {
+    pub fn new(
+        graphics_bytes_arc: Arc<Vec<u8>>,
+        tile_instances_arc: Arc<Vec<TileInstance>>,
+    ) -> Self {
         Self {
             program: Program {
                 graphics_bytes_arc,
+                tile_instances_arc,
                 lazy_pipeline_arc: Default::default(),
             },
         }
@@ -40,6 +44,7 @@ impl Component {
 
 struct Program {
     graphics_bytes_arc: Arc<Vec<u8>>,
+    tile_instances_arc: Arc<Vec<TileInstance>>,
     lazy_pipeline_arc: LazyPipelineArc,
 }
 impl shader::Program<Message> for Program {
@@ -73,6 +78,7 @@ impl shader::Program<Message> for Program {
     fn draw(&self, _: &Self::State, _: mouse::Cursor, _: Rectangle) -> Self::Primitive {
         FrameInfo {
             graphics_bytes_arc: self.graphics_bytes_arc.clone(),
+            tile_instances_arc: self.tile_instances_arc.clone(),
             lazy_pipeline_arc: self.lazy_pipeline_arc.clone(),
         }
     }
@@ -88,18 +94,19 @@ pub struct Uniforms {
 #[derive(Copy, Clone, Debug, bytemuck::Pod, bytemuck::Zeroable)]
 #[repr(C)]
 pub struct TileInstance {
-    x: u32,
-    y: u32,
-    id: u32,
-    pal: u8,
-    scale: u8,
-    flags: u16,
+    pub x: u32,
+    pub y: u32,
+    pub id: u32,
+    pub pal: u8,
+    pub scale: u8,
+    pub flags: u16,
 }
 
 /// Created every frame, and has the ability to set stuff on the pipeline.
 #[derive(Debug)]
 pub struct FrameInfo {
     graphics_bytes_arc: Arc<Vec<u8>>,
+    tile_instances_arc: Arc<Vec<TileInstance>>,
     lazy_pipeline_arc: LazyPipelineArc,
 }
 impl shader::Primitive for FrameInfo {
@@ -127,9 +134,10 @@ impl shader::Primitive for FrameInfo {
         let mut pipeline_rw = self.lazy_pipeline_arc.write().unwrap();
         let pipeline = pipeline_rw.get_or_insert_with(|| {
             TilemapShaderPipeline::new_and_create_wgpu_pipeline(
-                self.graphics_bytes_arc.clone(),
                 device,
                 format,
+                self.graphics_bytes_arc.clone(),
+                self.tile_instances_arc.clone(),
             )
         });
         pipeline.write_uniforms(
@@ -164,8 +172,8 @@ type LazyPipelineArc = Arc<RwLock<Option<TilemapShaderPipeline>>>;
 /// continuing access to the WGPU pipeline later on.
 #[derive(Debug)]
 struct TilemapShaderPipeline {
+    tile_instances_arc: Arc<Vec<TileInstance>>,
     pipeline: wgpu::RenderPipeline,
-    tile_instances: Vec<TileInstance>,
     instance_buffer: wgpu::Buffer,
     _palette_buffer: wgpu::Buffer,
     _graphics_buffer: wgpu::Buffer,
@@ -174,9 +182,10 @@ struct TilemapShaderPipeline {
 }
 impl TilemapShaderPipeline {
     fn new_and_create_wgpu_pipeline(
-        graphics_bytes_arc: Arc<Vec<u8>>,
         device: &wgpu::Device,
         format: wgpu::TextureFormat,
+        graphics_bytes_arc: Arc<Vec<u8>>,
+        tile_instances_arc: Arc<Vec<TileInstance>>,
     ) -> Self {
         let shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
             label: Some("tilemap shader module"),
@@ -219,47 +228,9 @@ impl TilemapShaderPipeline {
             multiview: None,
         });
 
-        let mut tile_instances = vec![];
-        for i in 0..64u32 {
-            let tx = i % 8 * 16;
-            let ty = i / 8 * 16;
-            tile_instances.push(TileInstance {
-                x: tx,
-                y: ty,
-                id: i * 4,
-                flags: 0,
-                pal: 3,
-                scale: 1,
-            });
-            tile_instances.push(TileInstance {
-                x: tx + 8,
-                y: ty,
-                id: i * 4 + 1,
-                flags: 0,
-                pal: 3,
-                scale: 1,
-            });
-            tile_instances.push(TileInstance {
-                x: tx,
-                y: ty + 8,
-                id: i * 4 + 2,
-                flags: 0,
-                pal: 3,
-                scale: 1,
-            });
-            tile_instances.push(TileInstance {
-                x: tx + 8,
-                y: ty + 8,
-                id: i * 4 + 3,
-                flags: 0,
-                pal: 3,
-                scale: 1,
-            });
-        }
-
         let instance_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
             label: Some("tilemap instance buffer"),
-            contents: bytemuck::cast_slice(&tile_instances),
+            contents: bytemuck::cast_slice(&tile_instances_arc),
             usage: wgpu::BufferUsages::VERTEX,
         });
 
@@ -309,7 +280,7 @@ impl TilemapShaderPipeline {
 
         Self {
             pipeline,
-            tile_instances,
+            tile_instances_arc,
             uniform_buffer,
             instance_buffer,
             _palette_buffer: palette_buffer,
@@ -355,6 +326,6 @@ impl TilemapShaderPipeline {
         pass.set_bind_group(0, &self.bind_group, &[]);
         pass.set_vertex_buffer(0, self.instance_buffer.slice(..));
 
-        pass.draw(0..4, 0..self.tile_instances.len() as u32);
+        pass.draw(0..4, 0..self.tile_instances_arc.len() as u32);
     }
 }
