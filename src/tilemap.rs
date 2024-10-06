@@ -238,12 +238,6 @@ impl TilemapShaderPipeline {
             multiview: None,
         });
 
-        let instance_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
-            label: Some("tilemap instance buffer"),
-            contents: bytemuck::cast_slice(&tile_instances_arc),
-            usage: wgpu::BufferUsages::VERTEX | wgpu::BufferUsages::COPY_DST,
-        });
-
         let mut palette = image::open("assets/palette.png").unwrap().to_rgba32f();
         palette
             .as_flat_samples_mut()
@@ -256,37 +250,21 @@ impl TilemapShaderPipeline {
             usage: wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_DST,
         });
 
-        let graphics_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
-            label: Some("tilemap graphics buffer"),
-            contents: &graphics_bytes_arc.read().unwrap(),
-            usage: wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_DST,
-        });
+        let graphics_buffer = create_graphics_buffer(device, &graphics_bytes_arc.read().unwrap());
         let uniform_buffer = device.create_buffer(&wgpu::BufferDescriptor {
             label: Some("tilemap uniform buffer"),
             size: std::mem::size_of::<Uniforms>() as _,
             usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
             mapped_at_creation: false,
         });
-
-        let bind_group_layout = pipeline.get_bind_group_layout(0);
-        let bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
-            label: Some("tilemap bind group"),
-            layout: &bind_group_layout,
-            entries: &[
-                wgpu::BindGroupEntry {
-                    binding: 0,
-                    resource: palette_buffer.as_entire_binding(),
-                },
-                wgpu::BindGroupEntry {
-                    binding: 1,
-                    resource: graphics_buffer.as_entire_binding(),
-                },
-                wgpu::BindGroupEntry {
-                    binding: 2,
-                    resource: uniform_buffer.as_entire_binding(),
-                },
-            ],
-        });
+        let bind_group = create_bind_group(
+            &device,
+            &pipeline,
+            &palette_buffer,
+            &graphics_buffer,
+            &uniform_buffer,
+        );
+        let instance_buffer = create_instance_buffer(&device, &tile_instances_arc);
 
         Self {
             pipeline,
@@ -312,34 +290,14 @@ impl TilemapShaderPipeline {
         // Only updating if size changed for now, since we don't expect the graphics bytes to be edited
         if self.graphics_buffer.size() != graphics_bytes.len() as _ {
             println!("Graphics buffer size changed, creating new one.");
-            let new_graphics_buffer =
-                device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
-                    label: Some("tilemap graphics buffer"),
-                    contents: &graphics_bytes,
-                    usage: wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_DST,
-                });
-            self.graphics_buffer = new_graphics_buffer;
-
-            let bind_group_layout = self.pipeline.get_bind_group_layout(0);
-            let bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
-                label: Some("tilemap bind group"),
-                layout: &bind_group_layout,
-                entries: &[
-                    wgpu::BindGroupEntry {
-                        binding: 0,
-                        resource: self.palette_buffer.as_entire_binding(),
-                    },
-                    wgpu::BindGroupEntry {
-                        binding: 1,
-                        resource: self.graphics_buffer.as_entire_binding(),
-                    },
-                    wgpu::BindGroupEntry {
-                        binding: 2,
-                        resource: self.uniform_buffer.as_entire_binding(),
-                    },
-                ],
-            });
-            self.bind_group = bind_group;
+            self.graphics_buffer = create_graphics_buffer(&device, &graphics_bytes);
+            self.bind_group = create_bind_group(
+                &device,
+                &self.pipeline,
+                &self.palette_buffer,
+                &self.graphics_buffer,
+                &self.uniform_buffer,
+            );
         }
     }
 
@@ -352,14 +310,8 @@ impl TilemapShaderPipeline {
         if !Arc::ptr_eq(&self.tile_instances_arc, tile_instances_arc) {
             if self.tile_instances_arc.len() != tile_instances_arc.len() {
                 println!("Tile instances buffer size changed, creating new one.");
-                let new_instance_buffer =
-                    device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
-                        label: Some("tilemap instance buffer"),
-                        contents: bytemuck::cast_slice(&tile_instances_arc),
-                        usage: wgpu::BufferUsages::VERTEX | wgpu::BufferUsages::COPY_DST,
-                    });
 
-                self.instance_buffer = new_instance_buffer;
+                self.instance_buffer = create_instance_buffer(&device, &tile_instances_arc);
                 self.tile_instances_arc = tile_instances_arc.clone();
             } else {
                 queue.write_buffer(
@@ -406,4 +358,49 @@ impl TilemapShaderPipeline {
 
         pass.draw(0..4, 0..self.tile_instances_arc.len() as u32);
     }
+}
+
+fn create_graphics_buffer(device: &wgpu::Device, graphics_bytes_arc: &Vec<u8>) -> wgpu::Buffer {
+    device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+        label: Some("tilemap graphics buffer"),
+        contents: graphics_bytes_arc,
+        usage: wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_DST,
+    })
+}
+fn create_bind_group(
+    device: &wgpu::Device,
+    pipeline: &wgpu::RenderPipeline,
+    palette_buffer: &wgpu::Buffer,
+    graphics_buffer: &wgpu::Buffer,
+    uniform_buffer: &wgpu::Buffer,
+) -> wgpu::BindGroup {
+    let bind_group_layout = pipeline.get_bind_group_layout(0);
+    device.create_bind_group(&wgpu::BindGroupDescriptor {
+        label: Some("tilemap bind group"),
+        layout: &bind_group_layout,
+        entries: &[
+            wgpu::BindGroupEntry {
+                binding: 0,
+                resource: palette_buffer.as_entire_binding(),
+            },
+            wgpu::BindGroupEntry {
+                binding: 1,
+                resource: graphics_buffer.as_entire_binding(),
+            },
+            wgpu::BindGroupEntry {
+                binding: 2,
+                resource: uniform_buffer.as_entire_binding(),
+            },
+        ],
+    })
+}
+fn create_instance_buffer(
+    device: &wgpu::Device,
+    tile_instances: &Vec<TileInstance>,
+) -> wgpu::Buffer {
+    device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+        label: Some("tilemap instance buffer"),
+        contents: bytemuck::cast_slice(tile_instances),
+        usage: wgpu::BufferUsages::VERTEX | wgpu::BufferUsages::COPY_DST,
+    })
 }
