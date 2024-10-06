@@ -231,7 +231,16 @@ impl GraphicsFile {
     fn get_tile_instances(&self) -> Arc<Vec<tilemap::TileInstance>> {
         let tile_offset = (self.offset_in_all_bytes as u32) / 32;
         let mut tile_instances = vec![];
-        for i in 0..(self.bytes.len() / 64) as u32 {
+
+        // Each iteration of the below for-loop is a 2x2 grid of 4 tiles which here we will call a
+        // quad.
+        let bits_per_pixel = 4;
+        let bits_per_tile = bits_per_pixel * 8 * 8;
+        let bytes_per_tile = bits_per_tile / 8;
+        let bytes_per_quad = bytes_per_tile * 4;
+        let number_of_quads = self.bytes.len() / bytes_per_quad;
+
+        for i in 0..(number_of_quads) as u32 {
             let tx = i % 8 * 16;
             let ty = i / 8 * 16;
             tile_instances.push(tilemap::TileInstance {

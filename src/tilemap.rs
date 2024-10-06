@@ -42,7 +42,16 @@ impl Component {
     }
 
     pub fn view(&self) -> Element<Message> {
-        shader_element(&self.program).width(256).height(128).into()
+        let instance_count = self.program.tile_instances_arc.len();
+        let quad_count = instance_count.div_ceil(4);
+        let quad_columns = quad_count.min(8);
+        let quad_rows = quad_count.div_ceil(8);
+        let gfx_pixels_per_quad = 16;
+        let screen_pixels_per_gfx_pixel = 2;
+        shader_element(&self.program)
+            .width((quad_columns * gfx_pixels_per_quad * screen_pixels_per_gfx_pixel) as u16)
+            .height((quad_rows * gfx_pixels_per_quad * screen_pixels_per_gfx_pixel) as u16)
+            .into()
     }
 }
 
