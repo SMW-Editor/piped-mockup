@@ -71,10 +71,10 @@ impl shader::Program<Message> for Program {
     }
 
     fn draw(&self, _: &Self::State, _: mouse::Cursor, _: Rectangle) -> Self::Primitive {
-        FrameInfo::new(
-            self.graphics_bytes_arc.clone(),
-            self.lazy_pipeline_arc.clone(),
-        )
+        FrameInfo {
+            graphics_bytes_arc: self.graphics_bytes_arc.clone(),
+            lazy_pipeline_arc: self.lazy_pipeline_arc.clone(),
+        }
     }
 }
 
@@ -101,14 +101,6 @@ pub struct TileInstance {
 pub struct FrameInfo {
     graphics_bytes_arc: Arc<Vec<u8>>,
     lazy_pipeline_arc: LazyPipelineArc,
-}
-impl FrameInfo {
-    fn new(graphics_bytes_arc: Arc<Vec<u8>>, state: LazyPipelineArc) -> Self {
-        Self {
-            graphics_bytes_arc,
-            lazy_pipeline_arc: state,
-        }
-    }
 }
 impl shader::Primitive for FrameInfo {
     fn prepare(
