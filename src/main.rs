@@ -53,6 +53,13 @@ impl App {
             Task::batch([
                 Task::perform(
                     load_file(PathBuf::from(format!(
+                        "{}/assets/anim.bin",
+                        env!("CARGO_MANIFEST_DIR")
+                    ))),
+                    Message::GraphicsFileLoaded,
+                ),
+                Task::perform(
+                    load_file(PathBuf::from(format!(
                         "{}/assets/global.bin",
                         env!("CARGO_MANIFEST_DIR")
                     ))),
@@ -61,6 +68,20 @@ impl App {
                 Task::perform(
                     load_file(PathBuf::from(format!(
                         "{}/assets/grass.bin",
+                        env!("CARGO_MANIFEST_DIR")
+                    ))),
+                    Message::GraphicsFileLoaded,
+                ),
+                Task::perform(
+                    load_file(PathBuf::from(format!(
+                        "{}/assets/onoff.bin",
+                        env!("CARGO_MANIFEST_DIR")
+                    ))),
+                    Message::GraphicsFileLoaded,
+                ),
+                Task::perform(
+                    load_file(PathBuf::from(format!(
+                        "{}/assets/pswitch.bin",
                         env!("CARGO_MANIFEST_DIR")
                     ))),
                     Message::GraphicsFileLoaded,
