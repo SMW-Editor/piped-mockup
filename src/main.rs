@@ -39,7 +39,7 @@ struct App {
 #[allow(dead_code)]
 #[derive(Debug, Clone)]
 enum Message {
-    FromDisplayedGraphicsFile(tilemap::Message),
+    FromDisplayedGraphicsFile(tilemap::PrivateMessage),
     FromPaletteSelector(palette_program::Message),
     GraphicsFileLoaded(Option<(PathBuf, Arc<Vec<u8>>)>),
     DisplayGraphicsFile(usize),
@@ -59,14 +59,28 @@ impl App {
             Task::batch([
                 Task::perform(
                     load_file(PathBuf::from(format!(
-                        "{}/assets/anim.bin",
+                        "{}/assets/global.bin",
                         env!("CARGO_MANIFEST_DIR")
                     ))),
                     Message::GraphicsFileLoaded,
                 ),
                 Task::perform(
                     load_file(PathBuf::from(format!(
-                        "{}/assets/global.bin",
+                        "{}/assets/grass.bin",
+                        env!("CARGO_MANIFEST_DIR")
+                    ))),
+                    Message::GraphicsFileLoaded,
+                ),
+                Task::perform(
+                    load_file(PathBuf::from(format!(
+                        "{}/assets/onoff.bin",
+                        env!("CARGO_MANIFEST_DIR")
+                    ))),
+                    Message::GraphicsFileLoaded,
+                ),
+                Task::perform(
+                    load_file(PathBuf::from(format!(
+                        "{}/assets/pswitch.bin",
                         env!("CARGO_MANIFEST_DIR")
                     ))),
                     Message::GraphicsFileLoaded,
@@ -111,30 +125,24 @@ impl App {
                 }
                 Task::none()
             }
-            Message::LoadMoreGraphicsFiles => Task::batch([
-                Task::perform(
-                    load_file(PathBuf::from(format!(
-                        "{}/assets/grass.bin",
-                        env!("CARGO_MANIFEST_DIR")
-                    ))),
-                    Message::GraphicsFileLoaded,
-                ),
-                Task::perform(
-                    load_file(PathBuf::from(format!(
-                        "{}/assets/onoff.bin",
-                        env!("CARGO_MANIFEST_DIR")
-                    ))),
-                    Message::GraphicsFileLoaded,
-                ),
-                Task::perform(
-                    load_file(PathBuf::from(format!(
-                        "{}/assets/pswitch.bin",
-                        env!("CARGO_MANIFEST_DIR")
-                    ))),
-                    Message::GraphicsFileLoaded,
-                ),
-            ]),
-            Message::FromDisplayedGraphicsFile(tilemap::Message::CursorMoved(_pos)) => Task::none(),
+            Message::LoadMoreGraphicsFiles => Task::batch([Task::perform(
+                load_file(PathBuf::from(format!(
+                    "{}/assets/anim.bin",
+                    env!("CARGO_MANIFEST_DIR")
+                ))),
+                Message::GraphicsFileLoaded,
+            )]),
+            Message::FromDisplayedGraphicsFile(m) => {
+                if let Some(tilemap_component) = self.displayed_graphics_file_component.as_mut() {
+                    match tilemap_component.update(m) {
+                        Some(tilemap::PublicMessage::TileClicked(tile_coords)) => {
+                            println!("Selected {tile_coords:?}");
+                        }
+                        None => {}
+                    }
+                }
+                Task::none()
+            }
             Message::FromPaletteSelector(_) => Task::none(),
             Message::MouseMovedOverPalette(point) => {
                 println!("Moved in palette {:?}", point);

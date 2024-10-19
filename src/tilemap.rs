@@ -3,7 +3,6 @@ use std::sync::RwLock;
 
 use glam::Vec2;
 
-use iced::Point;
 use iced::{
     advanced::Shell,
     event::Status,
@@ -16,13 +15,32 @@ use iced::{
 // module, and the `self` syntax only imports the module.
 use iced::widget::shader as shader_element;
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct TileCoords(usize, usize);
+
 pub struct Component {
     program: Program,
+    tile_hovered: Option<TileCoords>,
+    tile_mouse_pressed_on: Option<TileCoords>,
 }
+/// These are messages that parent is expected to want to handle.
 #[derive(Debug, Clone, Copy)]
-pub enum Message {
-    CursorMoved(Point),
+pub enum PublicMessage {
+    /// Raised when user presses then releases on the same tile.
+    TileClicked(TileCoords),
 }
+/// Parent of this component should pass this PrivateMessage to the Component::update function, which may return a PublicMessage.
+#[derive(Debug, Clone, Copy)]
+pub struct PrivateMessage(Message);
+
+#[derive(Debug, Clone, Copy)]
+enum Message {
+    CursorMoved(TileCoords),
+    LeftButtonPressedInside,
+    LeftButtonReleasedInside,
+    LeftButtonReleasedOutside,
+}
+
 impl Component {
     pub fn new(
         graphics_bytes_arc: Arc<RwLock<Vec<u8>>>,
@@ -34,6 +52,8 @@ impl Component {
                 tile_instances_arc,
                 lazy_pipeline_arc: Default::default(),
             },
+            tile_hovered: None,
+            tile_mouse_pressed_on: None,
         }
     }
 
@@ -41,7 +61,39 @@ impl Component {
         self.program.tile_instances_arc = tile_instances_arc;
     }
 
-    pub fn view(&self) -> Element<Message> {
+    pub fn update(&mut self, message: PrivateMessage) -> Option<PublicMessage> {
+        match message.0 {
+            Message::CursorMoved(tile_hovered) => {
+                self.tile_hovered = Some(tile_hovered);
+                None
+            }
+            Message::LeftButtonPressedInside => {
+                if let Some(tile_hovered) = self.tile_hovered {
+                    self.tile_mouse_pressed_on = Some(tile_hovered)
+                }
+                None
+            }
+            Message::LeftButtonReleasedInside => {
+                if let (Some(tile_mouse_pressed_on), Some(tile_hovered)) =
+                    (self.tile_mouse_pressed_on, self.tile_hovered)
+                {
+                    if tile_mouse_pressed_on == tile_hovered {
+                        Some(PublicMessage::TileClicked(tile_hovered))
+                    } else {
+                        None
+                    }
+                } else {
+                    None
+                }
+            }
+            Message::LeftButtonReleasedOutside => {
+                self.tile_mouse_pressed_on = None;
+                None
+            }
+        }
+    }
+
+    pub fn view(&self) -> Element<PrivateMessage> {
         let instance_count = self.program.tile_instances_arc.len();
         let quad_count = instance_count.div_ceil(4);
         let quad_columns = quad_count.min(8);
@@ -60,7 +112,7 @@ struct Program {
     tile_instances_arc: Arc<Vec<TileInstance>>,
     lazy_pipeline_arc: LazyPipelineArc,
 }
-impl shader::Program<Message> for Program {
+impl shader::Program<PrivateMessage> for Program {
     // This State type is what Iced puts in its widget tree, and passed to the update and draw
     // functions. We aren't using it, as it is initialized using Default, and for now we want to
     // manage our state ourselves in the app model.
@@ -73,13 +125,40 @@ impl shader::Program<Message> for Program {
         event: Event,
         bounds: Rectangle,
         cursor: Cursor,
-        _: &mut Shell<'_, Message>,
-    ) -> (Status, Option<Message>) {
+        _: &mut Shell<'_, PrivateMessage>,
+    ) -> (Status, Option<PrivateMessage>) {
         #[allow(clippy::single_match)]
         match event {
             Event::Mouse(mouse::Event::CursorMoved { .. }) => {
                 if let Some(pos) = cursor.position_in(bounds) {
-                    return (Status::Ignored, Some(Message::CursorMoved(pos)));
+                    return (
+                        Status::Captured,
+                        Some(PrivateMessage(Message::CursorMoved(TileCoords(
+                            (pos.x / 16.) as usize,
+                            (pos.y / 16.) as usize,
+                        )))),
+                    );
+                }
+            }
+            Event::Mouse(mouse::Event::ButtonPressed(mouse::Button::Left)) => {
+                if let Some(_pos) = cursor.position_in(bounds) {
+                    return (
+                        Status::Captured,
+                        Some(PrivateMessage(Message::LeftButtonPressedInside)),
+                    );
+                }
+            }
+            Event::Mouse(mouse::Event::ButtonReleased(mouse::Button::Left)) => {
+                if let Some(_pos) = cursor.position_in(bounds) {
+                    return (
+                        Status::Captured,
+                        Some(PrivateMessage(Message::LeftButtonReleasedInside)),
+                    );
+                } else {
+                    return (
+                        Status::Ignored,
+                        Some(PrivateMessage(Message::LeftButtonReleasedOutside)),
+                    );
                 }
             }
             _ => {}
