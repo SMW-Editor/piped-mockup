@@ -224,12 +224,8 @@ impl App {
         let heading = |label| container(label).padding(10);
         container(
             row![
-                column![heading("Block Library")]
-                    .align_x(Alignment::Center)
-                    .width(Length::FillPortion(1)),
-                vertical_rule(2),
                 column![
-                    heading("Block"),
+                    heading("Block Library"),
                     Space::with_height(Length::FillPortion(1)),
                     self.displayed_block_library.as_ref().map_or_else(
                         || container(column![]),
@@ -259,7 +255,7 @@ impl App {
                 .width(Length::FillPortion(1)),
                 vertical_rule(2),
                 column![
-                    heading("Graphics File Library"),
+                    heading("Graphics File"),
                     Space::with_height(Length::FillPortion(1)),
                     self.displayed_graphics_file_component.as_ref().map_or_else(
                         || container(column![]),
