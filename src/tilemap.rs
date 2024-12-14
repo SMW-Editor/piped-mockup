@@ -16,7 +16,7 @@ use iced::{
 use iced::widget::shader as shader_element;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct TileCoords(usize, usize);
+pub struct TileCoords(pub u32, pub u32);
 
 pub struct Component {
     program: Program,
@@ -59,6 +59,10 @@ impl Component {
 
     pub fn set_tile_instances(&mut self, tile_instances_arc: Arc<Vec<TileInstance>>) {
         self.program.tile_instances_arc = tile_instances_arc;
+    }
+
+    pub fn get_tile_instances(&self) -> Arc<Vec<TileInstance>> {
+        self.program.tile_instances_arc.clone()
     }
 
     pub fn update(&mut self, message: PrivateMessage) -> Option<PublicMessage> {
@@ -134,8 +138,8 @@ impl shader::Program<PrivateMessage> for Program {
                     return (
                         Status::Captured,
                         Some(PrivateMessage(Message::CursorMoved(TileCoords(
-                            (pos.x / 16.) as usize,
-                            (pos.y / 16.) as usize,
+                            (pos.x / 16.) as u32,
+                            (pos.y / 16.) as u32,
                         )))),
                     );
                 }

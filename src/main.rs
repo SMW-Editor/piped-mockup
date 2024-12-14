@@ -10,7 +10,9 @@ use palette_program::Palette;
 
 use iced::{
     application,
-    widget::{button, column, container, horizontal_rule, mouse_area, row, vertical_rule, Space},
+    widget::{
+        button, column, container, horizontal_rule, mouse_area, row, text, vertical_rule, Space,
+    },
     window, Alignment, Element, Length, Point, Settings, Task, Theme,
 };
 
@@ -34,6 +36,7 @@ struct App {
     graphics_files: Vec<GraphicsFile>,
     all_graphics_bytes: Arc<RwLock<Vec<u8>>>,
     displayed_block: Option<tilemap::Component>,
+    current_quadrant: usize,
 }
 
 #[allow(clippy::enum_variant_names)]
@@ -58,6 +61,7 @@ impl App {
                 graphics_files: vec![],
                 all_graphics_bytes: Arc::new(RwLock::new(vec![])),
                 displayed_block: None,
+                current_quadrant: 0,
             },
             Task::batch([
                 Task::perform(
@@ -144,6 +148,35 @@ impl App {
                     match tilemap_component.update(m) {
                         Some(tilemap::PublicMessage::TileClicked(tile_coords)) => {
                             println!("Selected {tile_coords:?}");
+                            if let Some(displayed_block) = self.displayed_block.as_mut() {
+                                displayed_block.set_tile_instances(Arc::new(
+                                    displayed_block
+                                        .get_tile_instances()
+                                        .iter()
+                                        .cloned()
+                                        .enumerate()
+                                        .map(|(i, instance)| {
+                                            if i == self.current_quadrant {
+                                                let mut instance = tilemap_component
+                                                    .get_tile_instances()
+                                                    .iter()
+                                                    .find(|tile| {
+                                                        tile.x / 8 == tile_coords.0
+                                                            && tile.y / 8 == tile_coords.1
+                                                    })
+                                                    .unwrap()
+                                                    .clone();
+                                                instance.x = ((i as u32) % 2) * 8;
+                                                instance.y = ((i as u32) / 2) * 8;
+                                                instance
+                                            } else {
+                                                instance
+                                            }
+                                        })
+                                        .collect(),
+                                ));
+                                self.current_quadrant = (self.current_quadrant + 1) % 4;
+                            }
                         }
                         None => {}
                     }
@@ -181,6 +214,8 @@ impl App {
                             Message::FromDisplayedBlock
                         ))
                     ),
+                    Space::with_height(Length::FillPortion(1)),
+                    container(text(self.current_quadrant)).padding(10),
                     Space::with_height(Length::FillPortion(1)),
                     horizontal_rule(2),
                     heading("Palette"),
