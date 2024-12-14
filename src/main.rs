@@ -33,6 +33,7 @@ struct App {
     palette_selector: Palette,
     graphics_files: Vec<GraphicsFile>,
     all_graphics_bytes: Arc<RwLock<Vec<u8>>>,
+    displayed_block: Option<tilemap::Component>,
 }
 
 #[allow(clippy::enum_variant_names)]
@@ -40,6 +41,7 @@ struct App {
 #[derive(Debug, Clone)]
 enum Message {
     FromDisplayedGraphicsFile(tilemap::PrivateMessage),
+    FromDisplayedBlock(tilemap::PrivateMessage),
     FromPaletteSelector(palette_program::Message),
     GraphicsFileLoaded(Option<(PathBuf, Arc<Vec<u8>>)>),
     DisplayGraphicsFile(usize),
@@ -55,6 +57,7 @@ impl App {
                 palette_selector: Palette::new(),
                 graphics_files: vec![],
                 all_graphics_bytes: Arc::new(RwLock::new(vec![])),
+                displayed_block: None,
             },
             Task::batch([
                 Task::perform(
@@ -102,6 +105,10 @@ impl App {
                     self.displayed_graphics_file_component = Some(tilemap::Component::new(
                         self.all_graphics_bytes.clone(),
                         file.get_tile_instances(),
+                    ));
+                    self.displayed_block = Some(tilemap::Component::new(
+                        self.all_graphics_bytes.clone(),
+                        Arc::new(file.get_tile_instances().iter().take(4).cloned().collect()),
                     ));
                 }
 
@@ -167,8 +174,13 @@ impl App {
                 column![
                     heading("Block"),
                     Space::with_height(Length::FillPortion(1)),
-                    container(Space::new(Length::Fixed(100.), Length::Fixed(100.)))
-                        .style(|theme: &Theme| container::background(theme.palette().primary)),
+                    self.displayed_block.as_ref().map_or_else(
+                        || container(column![]),
+                        |displayed_block| container(Element::map(
+                            displayed_block.view(),
+                            Message::FromDisplayedBlock
+                        ))
+                    ),
                     Space::with_height(Length::FillPortion(1)),
                     horizontal_rule(2),
                     heading("Palette"),
