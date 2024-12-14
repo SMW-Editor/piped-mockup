@@ -15,6 +15,7 @@ use iced::{
     },
     window, Alignment, Element, Length, Point, Settings, Task, Theme,
 };
+use tilemap::TileCoords;
 
 fn main() -> iced::Result {
     application("Piped Mockup", App::update, App::view)
@@ -35,8 +36,8 @@ struct App {
     palette_selector: Palette,
     graphics_files: Vec<GraphicsFile>,
     all_graphics_bytes: Arc<RwLock<Vec<u8>>>,
-    displayed_block: Option<tilemap::Component>,
-    current_quadrant: usize,
+    displayed_block_library: Option<tilemap::Component>,
+    brush: TileCoords,
 }
 
 #[allow(clippy::enum_variant_names)]
@@ -44,7 +45,7 @@ struct App {
 #[derive(Debug, Clone)]
 enum Message {
     FromDisplayedGraphicsFile(tilemap::PrivateMessage),
-    FromDisplayedBlock(tilemap::PrivateMessage),
+    FromDisplayedBlockLibrary(tilemap::PrivateMessage),
     FromPaletteSelector(palette_program::Message),
     GraphicsFileLoaded(Option<(PathBuf, Arc<Vec<u8>>)>),
     DisplayGraphicsFile(usize),
@@ -60,8 +61,8 @@ impl App {
                 palette_selector: Palette::new(),
                 graphics_files: vec![],
                 all_graphics_bytes: Arc::new(RwLock::new(vec![])),
-                displayed_block: None,
-                current_quadrant: 0,
+                displayed_block_library: None,
+                brush: TileCoords(0, 0),
             },
             Task::batch([
                 Task::perform(
@@ -110,9 +111,15 @@ impl App {
                         self.all_graphics_bytes.clone(),
                         file.get_tile_instances(),
                     ));
-                    self.displayed_block = Some(tilemap::Component::new(
+                    // Show single block
+                    // self.displayed_block_library = Some(tilemap::Component::new(
+                    //     self.all_graphics_bytes.clone(),
+                    //     Arc::new(file.get_tile_instances().iter().take(4).cloned().collect()),
+                    // ));
+                    // For now start out the displayed block library with the current size
+                    self.displayed_block_library = Some(tilemap::Component::new(
                         self.all_graphics_bytes.clone(),
-                        Arc::new(file.get_tile_instances().iter().take(4).cloned().collect()),
+                        file.get_tile_instances(),
                     ));
                 }
 
@@ -148,34 +155,51 @@ impl App {
                     match tilemap_component.update(m) {
                         Some(tilemap::PublicMessage::TileClicked(tile_coords)) => {
                             println!("Selected {tile_coords:?}");
-                            if let Some(displayed_block) = self.displayed_block.as_mut() {
-                                displayed_block.set_tile_instances(Arc::new(
-                                    displayed_block
+                            self.brush = tile_coords;
+                        }
+                        None => {}
+                    }
+                }
+                Task::none()
+            }
+            Message::FromDisplayedBlockLibrary(m) => {
+                if let Some(graphics_file_component) =
+                    self.displayed_graphics_file_component.as_mut()
+                {
+                    match graphics_file_component.update(m) {
+                        Some(tilemap::PublicMessage::TileClicked(clicked_tile_coords)) => {
+                            let brush = self.brush;
+                            println!("Painting {clicked_tile_coords:?} with {brush:?}");
+                            if let Some(displayed_block_library) =
+                                self.displayed_block_library.as_mut()
+                            {
+                                displayed_block_library.set_tile_instances(Arc::new(
+                                    displayed_block_library
                                         .get_tile_instances()
                                         .iter()
                                         .cloned()
-                                        .enumerate()
-                                        .map(|(i, instance)| {
-                                            if i == self.current_quadrant {
-                                                let mut instance = tilemap_component
-                                                    .get_tile_instances()
-                                                    .iter()
-                                                    .find(|tile| {
-                                                        tile.x / 8 == tile_coords.0
-                                                            && tile.y / 8 == tile_coords.1
-                                                    })
-                                                    .unwrap()
-                                                    .clone();
-                                                instance.x = ((i as u32) % 2) * 8;
-                                                instance.y = ((i as u32) / 2) * 8;
-                                                instance
+                                        .map(|tile_in_block_library| {
+                                            if tile_in_block_library.get_tile_coords()
+                                                == clicked_tile_coords
+                                            {
+                                                let mut copy_of_tile_from_graphics_file =
+                                                    graphics_file_component
+                                                        .get_tile_instances()
+                                                        .iter()
+                                                        .find(|tile| {
+                                                            tile.get_tile_coords() == brush
+                                                        })
+                                                        .unwrap()
+                                                        .clone();
+                                                copy_of_tile_from_graphics_file
+                                                    .move_to_tile_coords(clicked_tile_coords);
+                                                copy_of_tile_from_graphics_file
                                             } else {
-                                                instance
+                                                tile_in_block_library
                                             }
                                         })
                                         .collect(),
                                 ));
-                                self.current_quadrant = (self.current_quadrant + 1) % 4;
                             }
                         }
                         None => {}
@@ -207,15 +231,18 @@ impl App {
                 column![
                     heading("Block"),
                     Space::with_height(Length::FillPortion(1)),
-                    self.displayed_block.as_ref().map_or_else(
+                    self.displayed_block_library.as_ref().map_or_else(
                         || container(column![]),
-                        |displayed_block| container(Element::map(
-                            displayed_block.view(),
-                            Message::FromDisplayedBlock
+                        |displayed_block_library| container(Element::map(
+                            displayed_block_library.view(),
+                            Message::FromDisplayedBlockLibrary
                         ))
                     ),
                     Space::with_height(Length::FillPortion(1)),
-                    container(text(self.current_quadrant)).padding(10),
+                    container(text(
+                        self.brush.0.to_string() + ", " + &self.brush.1.to_string()
+                    ))
+                    .padding(10),
                     Space::with_height(Length::FillPortion(1)),
                     horizontal_rule(2),
                     heading("Palette"),

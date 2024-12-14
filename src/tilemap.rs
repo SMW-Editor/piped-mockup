@@ -197,6 +197,15 @@ pub struct TileInstance {
     pub scale: u8,
     pub flags: u16,
 }
+impl TileInstance {
+    pub fn get_tile_coords(&self) -> TileCoords {
+        TileCoords(self.x / 8, self.y / 8)
+    }
+    pub fn move_to_tile_coords(&mut self, tile_coords: TileCoords) {
+        self.x = tile_coords.0 * 8;
+        self.y = tile_coords.1 * 8;
+    }
+}
 
 /// Created every frame, and has the ability to set stuff on the pipeline.
 #[derive(Debug)]
