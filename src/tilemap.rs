@@ -3,6 +3,7 @@ use std::sync::RwLock;
 
 use glam::Vec2;
 
+use iced::widget::mouse_area;
 use iced::{
     advanced::Shell,
     event::Status,
@@ -38,7 +39,7 @@ enum Message {
     CursorMoved(TileCoords),
     LeftButtonPressedInside,
     LeftButtonReleasedInside,
-    LeftButtonReleasedOutside,
+    CursorExited,
 }
 
 impl Component {
@@ -90,7 +91,7 @@ impl Component {
                     None
                 }
             }
-            Message::LeftButtonReleasedOutside => {
+            Message::CursorExited => {
                 self.tile_mouse_pressed_on = None;
                 None
             }
@@ -104,10 +105,21 @@ impl Component {
         let quad_rows = quad_count.div_ceil(8);
         let gfx_pixels_per_quad = 16;
         let screen_pixels_per_gfx_pixel = 2;
-        shader_element(&self.program)
-            .width((quad_columns * gfx_pixels_per_quad * screen_pixels_per_gfx_pixel) as u16)
-            .height((quad_rows * gfx_pixels_per_quad * screen_pixels_per_gfx_pixel) as u16)
-            .into()
+        mouse_area(
+            shader_element(&self.program)
+                .width((quad_columns * gfx_pixels_per_quad * screen_pixels_per_gfx_pixel) as u16)
+                .height((quad_rows * gfx_pixels_per_quad * screen_pixels_per_gfx_pixel) as u16),
+        )
+        .on_press(PrivateMessage(Message::LeftButtonPressedInside))
+        .on_release(PrivateMessage(Message::LeftButtonReleasedInside))
+        .on_exit(PrivateMessage(Message::CursorExited))
+        .on_move(|point| {
+            PrivateMessage(Message::CursorMoved(TileCoords(
+                (point.x / 16.) as u32,
+                (point.y / 16.) as u32,
+            )))
+        })
+        .into()
     }
 }
 
@@ -126,48 +138,11 @@ impl shader::Program<PrivateMessage> for Program {
     fn update(
         &self,
         _: &mut Self::State,
-        event: Event,
-        bounds: Rectangle,
-        cursor: Cursor,
+        _event: Event,
+        _bounds: Rectangle,
+        _cursor: Cursor,
         _: &mut Shell<'_, PrivateMessage>,
     ) -> (Status, Option<PrivateMessage>) {
-        #[allow(clippy::single_match)]
-        match event {
-            Event::Mouse(mouse::Event::CursorMoved { .. }) => {
-                if let Some(pos) = cursor.position_in(bounds) {
-                    return (
-                        Status::Captured,
-                        Some(PrivateMessage(Message::CursorMoved(TileCoords(
-                            (pos.x / 16.) as u32,
-                            (pos.y / 16.) as u32,
-                        )))),
-                    );
-                }
-            }
-            Event::Mouse(mouse::Event::ButtonPressed(mouse::Button::Left)) => {
-                if let Some(_pos) = cursor.position_in(bounds) {
-                    return (
-                        Status::Captured,
-                        Some(PrivateMessage(Message::LeftButtonPressedInside)),
-                    );
-                }
-            }
-            Event::Mouse(mouse::Event::ButtonReleased(mouse::Button::Left)) => {
-                if let Some(_pos) = cursor.position_in(bounds) {
-                    return (
-                        Status::Captured,
-                        Some(PrivateMessage(Message::LeftButtonReleasedInside)),
-                    );
-                } else {
-                    return (
-                        Status::Ignored,
-                        Some(PrivateMessage(Message::LeftButtonReleasedOutside)),
-                    );
-                }
-            }
-            _ => {}
-        };
-
         (Status::Ignored, None)
     }
 
