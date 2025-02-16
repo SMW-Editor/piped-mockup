@@ -28,25 +28,24 @@ fn vs_main(in: VertexIn) -> VertexOut {
     position.y += uniforms.resolution.y;
     position /= uniforms.resolution;
 
-    return VertexOut(vec4f(position, 0., 1.), uv, in.tile_instance.zw);
+    return VertexOut(vec4f(position, 0., 1.), uv, in.tile_instance.z, in.tile_instance.w);
 }
 
 struct VertexOut {
 	@builtin(position) position: vec4f,
 	@location(0) uv: vec2f,
-	@location(1) data: vec2u,
+	@location(1) tile_id: u32,
+	@location(2) pal_scale_flags_flags: u32,
 }
 
 @fragment
 fn fs_main(in: VertexOut) -> @location(0) vec4f {
     let uv = vec2u(u32(in.uv.x * 8), u32((1 - in.uv.y) * 8));
-    let tile_id = in.data.x;
-    let pal_offset = u32((in.data.y & 0xFF) * 0x10);
 
     // Since graphics is an array of vec4u, 2 consecutive items in the array make up the bytes for
     // 1 tile.
-    let part1 = graphics[tile_id * 2 + 0];
-    let part2 = graphics[tile_id * 2 + 1];
+    let part1 = graphics[in.tile_id * 2 + 0];
+    let part2 = graphics[in.tile_id * 2 + 1];
 
     let lpart1 = part1[uv.y / 2];
     let lpart2 = part2[uv.y / 2];
@@ -62,6 +61,8 @@ fn fs_main(in: VertexOut) -> @location(0) vec4f {
     if color_col == 0 {
 		discard;
     } else {
+        let pal = in.pal_scale_flags_flags & 0xFF;
+        let pal_offset = u32(pal * 0x10);
         return palette[color_col + pal_offset];
     }
 }
