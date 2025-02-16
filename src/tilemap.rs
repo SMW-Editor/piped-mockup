@@ -165,10 +165,17 @@ pub struct Uniforms {
 #[derive(Copy, Clone, Debug, bytemuck::Pod, bytemuck::Zeroable)]
 #[repr(C)]
 pub struct TileInstance {
+    // Position (in units of the pixelart's pixels)
     pub x: u32,
     pub y: u32,
+
+    // Which graphic bytes to display
     pub id: u32,
+
+    // Which palette row to use for colors
     pub pal: u8,
+
+    // Settings for how to display the graphic
     pub scale: u8,
     pub flags: u16,
 }

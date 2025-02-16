@@ -109,7 +109,7 @@ impl App {
                 if self.displayed_graphics_file_component.is_none() {
                     self.displayed_graphics_file_component = Some(tilemap::Component::new(
                         self.all_graphics_bytes.clone(),
-                        file.get_tile_instances(),
+                        file.layout_all_tile_instances_from_file(),
                     ));
                     // Show single block
                     // self.displayed_block_library = Some(tilemap::Component::new(
@@ -119,7 +119,7 @@ impl App {
                     // For now start out the displayed block library with the current size
                     self.displayed_block_library = Some(tilemap::Component::new(
                         self.all_graphics_bytes.clone(),
-                        file.get_tile_instances(),
+                        file.layout_all_tile_instances_from_file(),
                     ));
                 }
 
@@ -134,11 +134,12 @@ impl App {
             Message::DisplayGraphicsFile(file_index) => {
                 let file = self.graphics_files.get(file_index).unwrap();
                 if let Some(tilemap_component) = self.displayed_graphics_file_component.as_mut() {
-                    tilemap_component.set_tile_instances(file.get_tile_instances());
+                    tilemap_component
+                        .set_tile_instances(file.layout_all_tile_instances_from_file());
                 } else {
                     self.displayed_graphics_file_component = Some(tilemap::Component::new(
                         self.all_graphics_bytes.clone(),
-                        file.get_tile_instances(),
+                        file.layout_all_tile_instances_from_file(),
                     ));
                 }
                 Task::none()
@@ -306,49 +307,58 @@ struct GraphicsFile {
     offset_in_all_bytes: usize,
 }
 impl GraphicsFile {
-    fn get_tile_instances(&self) -> Arc<Vec<tilemap::TileInstance>> {
-        let tile_offset = (self.offset_in_all_bytes as u32) / 32;
+    fn layout_all_tile_instances_from_file(&self) -> Arc<Vec<tilemap::TileInstance>> {
         let mut tile_instances = vec![];
 
         // Each iteration of the below for-loop is a 2x2 grid of 4 tiles which here we will call a
         // quad.
         let bits_per_pixel = 4;
         let bits_per_tile = bits_per_pixel * 8 * 8;
-        let bytes_per_tile = bits_per_tile / 8;
+        let bytes_per_tile = bits_per_tile / 8; // it's 32
         let bytes_per_quad = bytes_per_tile * 4;
-        let number_of_quads = self.bytes.len() / bytes_per_quad;
+        let number_of_quads_in_this_file = self.bytes.len() / bytes_per_quad;
 
-        for i in 0..(number_of_quads) as u32 {
-            let tx = i % 8 * 16;
-            let ty = i / 8 * 16;
+        // If the all-bytes array was an all-tiles array, the following number would be the index
+        // of the first tile in this file.
+        let first_tile_id_of_file = (self.offset_in_all_bytes / bytes_per_tile) as u32;
+
+        let quads_per_row = 8;
+
+        for quad_index in 0..(number_of_quads_in_this_file) as u32 {
+            // These are in units of the visible pixels in the tile
+            let quad_left_x = quad_index % quads_per_row * 16;
+            let quad_top_y = quad_index / quads_per_row * 16;
+
+            let first_tile_id_of_quad = first_tile_id_of_file + quad_index * 4;
+
             tile_instances.push(tilemap::TileInstance {
-                x: tx,
-                y: ty,
-                id: tile_offset + i * 4,
+                x: quad_left_x,
+                y: quad_top_y,
+                id: first_tile_id_of_quad,
                 pal: 3,
                 scale: 1,
                 flags: 0,
             });
             tile_instances.push(tilemap::TileInstance {
-                x: tx + 8,
-                y: ty,
-                id: tile_offset + i * 4 + 1,
+                x: quad_left_x + 8,
+                y: quad_top_y,
+                id: first_tile_id_of_quad + 1,
                 pal: 3,
                 scale: 1,
                 flags: 0,
             });
             tile_instances.push(tilemap::TileInstance {
-                x: tx,
-                y: ty + 8,
-                id: tile_offset + i * 4 + 2,
+                x: quad_left_x,
+                y: quad_top_y + 8,
+                id: first_tile_id_of_quad + 2,
                 pal: 3,
                 scale: 1,
                 flags: 0,
             });
             tile_instances.push(tilemap::TileInstance {
-                x: tx + 8,
-                y: ty + 8,
-                id: tile_offset + i * 4 + 3,
+                x: quad_left_x + 8,
+                y: quad_top_y + 8,
+                id: first_tile_id_of_quad + 3,
                 pal: 3,
                 scale: 1,
                 flags: 0,

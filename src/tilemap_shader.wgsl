@@ -8,8 +8,27 @@ struct Uniforms {
 @group(0) @binding(2) var<uniform> uniforms: Uniforms;
 
 struct VertexIn {
+    // Vertex index goes from 0 to 3, for each tile
 	@builtin(vertex_index) vertex_index: u32,
-	@location(0) tile: vec4u,
+	@location(0) tile_instance: vec4u,
+}
+
+@vertex
+fn vs_main(in: VertexIn) -> VertexOut {
+    let uv = vec2f(vec2u((in.vertex_index << 1) & 2, in.vertex_index & 2)) / 2.0;
+
+    // Actual final position of the vertex
+    var position = vec2f(uv);
+    position *= 8.0;
+    position.x += f32(in.tile_instance.x);
+    position.y -= f32(in.tile_instance.y);
+    position.y -= 8.0;
+    position *= 4.0;
+    position.x -= uniforms.resolution.x;
+    position.y += uniforms.resolution.y;
+    position /= uniforms.resolution;
+
+    return VertexOut(vec4f(position, 0., 1.), uv, in.tile_instance.zw);
 }
 
 struct VertexOut {
@@ -18,28 +37,14 @@ struct VertexOut {
 	@location(1) data: vec2u,
 }
 
-@vertex
-fn vs_main(in: VertexIn) -> VertexOut {
-    let uv = vec2f(vec2u((in.vertex_index << 1) & 2, in.vertex_index & 2)) / 2.0;
-    var position = vec2f(uv);
-    position *= 8.0;
-    position.x += f32(in.tile.x);
-    position.y -= f32(in.tile.y);
-    position.y -= 8.0;
-    position *= 4.0;
-    position.x -= uniforms.resolution.x;
-    position.y += uniforms.resolution.y;
-    position /= uniforms.resolution;
-    return VertexOut(vec4f(position, 0., 1.), uv, in.tile.zw);
-}
-
-
 @fragment
 fn fs_main(in: VertexOut) -> @location(0) vec4f {
     let uv = vec2u(u32(in.uv.x * 8), u32((1 - in.uv.y) * 8));
     let tile_id = in.data.x;
     let pal_offset = u32((in.data.y & 0xFF) * 0x10);
 
+    // Since graphics is an array of vec4u, 2 consecutive items in the array make up the bytes for
+    // 1 tile.
     let part1 = graphics[tile_id * 2 + 0];
     let part2 = graphics[tile_id * 2 + 1];
 
