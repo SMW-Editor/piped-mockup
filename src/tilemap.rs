@@ -98,28 +98,29 @@ impl Component {
         }
     }
 
-    pub fn view(&self) -> Element<PrivateMessage> {
+    pub fn view(&self, dimens_in_tiles: Option<TileCoords>) -> Element<PrivateMessage> {
         let instance_count = self.program.tile_instances_arc.len();
         let quad_count = instance_count.div_ceil(4);
-        let quad_columns = quad_count.min(8);
-        let quad_rows = quad_count.div_ceil(8);
+        let (quad_columns, quad_rows) = if let Some(dimens_in_tiles) = dimens_in_tiles {
+            (dimens_in_tiles.0 / 2, dimens_in_tiles.1 / 2)
+        } else {
+            (quad_count.min(8) as u32, quad_count.div_ceil(8) as u32)
+        };
         let gfx_pixels_per_quad = 16;
         let screen_pixels_per_gfx_pixel = 2;
-        mouse_area(
-            shader_element(&self.program)
-                .width((quad_columns * gfx_pixels_per_quad * screen_pixels_per_gfx_pixel) as u16)
-                .height((quad_rows * gfx_pixels_per_quad * screen_pixels_per_gfx_pixel) as u16),
-        )
-        .on_press(PrivateMessage(Message::LeftButtonPressedInside))
-        .on_release(PrivateMessage(Message::LeftButtonReleasedInside))
-        .on_exit(PrivateMessage(Message::CursorExited))
-        .on_move(|point| {
-            PrivateMessage(Message::CursorMoved(TileCoords(
-                (point.x / 16.) as u32,
-                (point.y / 16.) as u32,
-            )))
-        })
-        .into()
+        let width = (quad_columns * gfx_pixels_per_quad * screen_pixels_per_gfx_pixel) as u16;
+        let height = (quad_rows * gfx_pixels_per_quad * screen_pixels_per_gfx_pixel) as u16;
+        mouse_area(shader_element(&self.program).width(width).height(height))
+            .on_press(PrivateMessage(Message::LeftButtonPressedInside))
+            .on_release(PrivateMessage(Message::LeftButtonReleasedInside))
+            .on_exit(PrivateMessage(Message::CursorExited))
+            .on_move(|point| {
+                PrivateMessage(Message::CursorMoved(TileCoords(
+                    (point.x / 16.) as u32,
+                    (point.y / 16.) as u32,
+                )))
+            })
+            .into()
     }
 }
 

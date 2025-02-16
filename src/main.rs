@@ -15,7 +15,7 @@ use iced::{
     },
     window, Alignment, Element, Length, Point, Settings, Task, Theme,
 };
-use tilemap::TileCoords;
+use tilemap::{TileCoords, TileInstance};
 
 fn main() -> iced::Result {
     application("Piped Mockup", App::update, App::view)
@@ -119,7 +119,7 @@ impl App {
                     // For now start out the displayed block library with the current size
                     self.displayed_block_library = Some(tilemap::Component::new(
                         self.all_graphics_bytes.clone(),
-                        file.layout_all_tile_instances_from_file(),
+                        Arc::new(Vec::new()),
                     ));
                 }
 
@@ -174,33 +174,38 @@ impl App {
                             if let Some(displayed_block_library) =
                                 self.displayed_block_library.as_mut()
                             {
-                                displayed_block_library.set_tile_instances(Arc::new(
-                                    displayed_block_library
-                                        .get_tile_instances()
-                                        .iter()
-                                        .cloned()
-                                        .map(|tile_in_block_library| {
-                                            if tile_in_block_library.get_tile_coords()
-                                                == clicked_tile_coords
-                                            {
-                                                let mut copy_of_tile_from_graphics_file =
-                                                    graphics_file_component
-                                                        .get_tile_instances()
-                                                        .iter()
-                                                        .find(|tile| {
-                                                            tile.get_tile_coords() == brush
-                                                        })
-                                                        .unwrap()
-                                                        .clone();
-                                                copy_of_tile_from_graphics_file
-                                                    .move_to_tile_coords(clicked_tile_coords);
-                                                copy_of_tile_from_graphics_file
-                                            } else {
-                                                tile_in_block_library
-                                            }
-                                        })
-                                        .collect(),
-                                ));
+                                let mut copy_of_tile_from_graphics_file = graphics_file_component
+                                    .get_tile_instances()
+                                    .iter()
+                                    .find(|tile| tile.get_tile_coords() == brush)
+                                    .unwrap()
+                                    .clone();
+                                copy_of_tile_from_graphics_file
+                                    .move_to_tile_coords(clicked_tile_coords);
+                                displayed_block_library.set_tile_instances(Arc::new({
+                                    let mut found = false;
+                                    let mut new_tile_instances_for_block_library =
+                                        displayed_block_library
+                                            .get_tile_instances()
+                                            .iter()
+                                            .cloned()
+                                            .map(|tile_in_block_library| {
+                                                if tile_in_block_library.get_tile_coords()
+                                                    == clicked_tile_coords
+                                                {
+                                                    found = true;
+                                                    copy_of_tile_from_graphics_file
+                                                } else {
+                                                    tile_in_block_library
+                                                }
+                                            })
+                                            .collect::<Vec<TileInstance>>();
+                                    if !found {
+                                        new_tile_instances_for_block_library
+                                            .push(copy_of_tile_from_graphics_file);
+                                    }
+                                    new_tile_instances_for_block_library
+                                }));
                             }
                         }
                         None => {}
@@ -231,7 +236,7 @@ impl App {
                     self.displayed_block_library.as_ref().map_or_else(
                         || container(column![]),
                         |displayed_block_library| container(Element::map(
-                            displayed_block_library.view(),
+                            displayed_block_library.view(Some(TileCoords(32, 32))),
                             Message::FromDisplayedBlockLibrary
                         ))
                     ),
@@ -261,7 +266,7 @@ impl App {
                     self.displayed_graphics_file_component.as_ref().map_or_else(
                         || container(column![]),
                         |displayed_graphics_file_component| container(Element::map(
-                            displayed_graphics_file_component.view(),
+                            displayed_graphics_file_component.view(None),
                             Message::FromDisplayedGraphicsFile
                         ))
                     ),
