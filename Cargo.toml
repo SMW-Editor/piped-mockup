@@ -9,6 +9,7 @@ lto = "off"
 [dependencies]
 iced = { version = "0.13.1", features = [
     "advanced",
+    "canvas",
     "debug",
     "image",
     "tokio",

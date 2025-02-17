@@ -8,13 +8,7 @@ use std::{
 
 use palette_program::Palette;
 
-use iced::{
-    application,
-    widget::{
-        button, column, container, horizontal_rule, mouse_area, row, text, vertical_rule, Space,
-    },
-    window, Alignment, Element, Length, Point, Settings, Task, Theme,
-};
+use iced::{application, window, Alignment, Element, Length, Point, Settings, Task, Theme};
 use tilemap::{TileCoords, TileInstance};
 
 fn main() -> iced::Result {
@@ -227,6 +221,7 @@ impl App {
     }
 
     fn view(&self) -> Element<Message> {
+        use iced::widget::{column, row, *};
         let heading = |label| container(label).padding(10);
         container(
             row![

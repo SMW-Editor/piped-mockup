@@ -3,12 +3,18 @@ use std::sync::RwLock;
 
 use glam::Vec2;
 
-use iced::widget::mouse_area;
+use iced::Color;
+use iced::Point;
+use iced::Renderer;
+use iced::Size;
 use iced::{
     advanced::Shell,
     event::Status,
     mouse::{self, Cursor},
-    widget::shader::{self, wgpu, wgpu::util::DeviceExt, Event, Viewport},
+    widget::{
+        canvas,
+        shader::{self, wgpu, wgpu::util::DeviceExt, Event, Viewport},
+    },
     Element, Rectangle,
 };
 
@@ -21,6 +27,7 @@ pub struct TileCoords(pub u32, pub u32);
 
 pub struct Component {
     program: Program,
+    canvas: CanvasOverlay,
     tile_hovered: Option<TileCoords>,
     tile_mouse_pressed_on: Option<TileCoords>,
 }
@@ -53,6 +60,7 @@ impl Component {
                 tile_instances_arc,
                 lazy_pipeline_arc: Default::default(),
             },
+            canvas: CanvasOverlay::new(),
             tile_hovered: None,
             tile_mouse_pressed_on: None,
         }
@@ -99,6 +107,8 @@ impl Component {
     }
 
     pub fn view(&self, dimens_in_tiles: Option<TileCoords>) -> Element<PrivateMessage> {
+        use iced::widget::*;
+
         let instance_count = self.program.tile_instances_arc.len();
         let quad_count = instance_count.div_ceil(4);
         let (quad_columns, quad_rows) = if let Some(dimens_in_tiles) = dimens_in_tiles {
@@ -110,17 +120,21 @@ impl Component {
         let screen_pixels_per_gfx_pixel = 2;
         let width = (quad_columns * gfx_pixels_per_quad * screen_pixels_per_gfx_pixel) as u16;
         let height = (quad_rows * gfx_pixels_per_quad * screen_pixels_per_gfx_pixel) as u16;
-        mouse_area(shader_element(&self.program).width(width).height(height))
-            .on_press(PrivateMessage(Message::LeftButtonPressedInside))
-            .on_release(PrivateMessage(Message::LeftButtonReleasedInside))
-            .on_exit(PrivateMessage(Message::CursorExited))
-            .on_move(|point| {
-                PrivateMessage(Message::CursorMoved(TileCoords(
-                    (point.x / 16.) as u32,
-                    (point.y / 16.) as u32,
-                )))
-            })
-            .into()
+
+        mouse_area(stack!(
+            shader_element(&self.program).width(width).height(height),
+            canvas(&self.canvas).width(width).height(height)
+        ))
+        .on_press(PrivateMessage(Message::LeftButtonPressedInside))
+        .on_release(PrivateMessage(Message::LeftButtonReleasedInside))
+        .on_exit(PrivateMessage(Message::CursorExited))
+        .on_move(|point| {
+            PrivateMessage(Message::CursorMoved(TileCoords(
+                (point.x / 16.) as u32,
+                (point.y / 16.) as u32,
+            )))
+        })
+        .into()
     }
 }
 
@@ -487,4 +501,37 @@ fn create_instance_buffer(
         contents: bytemuck::cast_slice(tile_instances),
         usage: wgpu::BufferUsages::VERTEX | wgpu::BufferUsages::COPY_DST,
     })
+}
+
+struct CanvasOverlay {
+    canvas_cache: canvas::Cache,
+}
+
+impl CanvasOverlay {
+    pub fn new() -> Self {
+        Self {
+            canvas_cache: canvas::Cache::default(),
+        }
+    }
+}
+
+impl<Message> canvas::Program<Message> for CanvasOverlay {
+    type State = ();
+
+    fn draw(
+        &self,
+        _state: &Self::State,
+        renderer: &Renderer,
+        _theme: &iced::Theme,
+        bounds: Rectangle,
+        _cursor: iced::mouse::Cursor,
+    ) -> Vec<canvas::Geometry<Renderer>> {
+        vec![self.canvas_cache.draw(renderer, bounds.size(), |frame| {
+            frame.fill_rectangle(
+                Point::new(10., 10.),
+                Size::new(2., 2.),
+                Color::new(0.5, 0.5, 0.5, 1.),
+            );
+        })]
+    }
 }
