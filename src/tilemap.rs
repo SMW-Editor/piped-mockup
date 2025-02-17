@@ -3,6 +3,7 @@ use std::sync::RwLock;
 
 use glam::Vec2;
 
+use iced::widget::canvas::Stroke;
 use iced::Color;
 use iced::Point;
 use iced::Renderer;
@@ -527,10 +528,14 @@ impl<Message> canvas::Program<Message> for CanvasOverlay {
         _cursor: iced::mouse::Cursor,
     ) -> Vec<canvas::Geometry<Renderer>> {
         vec![self.canvas_cache.draw(renderer, bounds.size(), |frame| {
-            frame.fill_rectangle(
-                Point::new(10., 10.),
-                Size::new(2., 2.),
-                Color::new(0.5, 0.5, 0.5, 1.),
+            frame.stroke_rectangle(
+                Point::new(32., 32.),
+                Size::new(16., 16.),
+                Stroke {
+                    width: 4.,
+                    style: Color::new(0.5, 0.5, 0.5, 1.).into(),
+                    ..Default::default()
+                },
             );
         })]
     }
