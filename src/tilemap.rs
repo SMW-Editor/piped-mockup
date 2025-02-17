@@ -538,7 +538,9 @@ impl<Message> canvas::Program<Message> for CanvasOverlay {
                 Point::new(32. - half_stroke_width - 0.5, 32. - half_stroke_width - 0.5),
                 Size::new(16. + stroke_width, 16. + stroke_width),
                 Stroke {
-                    width: stroke_width,
+                    // Add a little to the visible stroke width so that even with antialiasing,
+                    // the rectangle will not reveal any pixels of the surrounding tiles.
+                    width: stroke_width + 1.,
                     style: Color::new(0.5, 0.5, 0.5, 1.).into(),
                     ..Default::default()
                 },
