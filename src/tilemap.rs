@@ -528,11 +528,13 @@ impl<Message> canvas::Program<Message> for CanvasOverlay {
         _cursor: iced::mouse::Cursor,
     ) -> Vec<canvas::Geometry<Renderer>> {
         vec![self.canvas_cache.draw(renderer, bounds.size(), |frame| {
+            let stroke_width = 4.;
+            let half_stroke_width = stroke_width / 2.;
             frame.stroke_rectangle(
-                Point::new(32., 32.),
-                Size::new(16., 16.),
+                Point::new(32. - half_stroke_width, 32. - half_stroke_width),
+                Size::new(16. + stroke_width, 16. + stroke_width),
                 Stroke {
-                    width: 4.,
+                    width: stroke_width,
                     style: Color::new(0.5, 0.5, 0.5, 1.).into(),
                     ..Default::default()
                 },
