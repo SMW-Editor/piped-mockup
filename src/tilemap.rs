@@ -27,8 +27,8 @@ use iced::widget::shader as shader_element;
 pub struct TileCoords(pub u32, pub u32);
 
 pub struct Component {
-    program: Program,
-    canvas: CanvasOverlay,
+    gfx_program: Program,
+    overlay: CanvasOverlay,
 }
 /// These are messages that parent is expected to want to handle.
 #[derive(Debug, Clone, Copy)]
@@ -54,40 +54,41 @@ impl Component {
         tile_instances_arc: Arc<Vec<TileInstance>>,
     ) -> Self {
         Self {
-            program: Program {
+            gfx_program: Program {
                 graphics_bytes_arc,
                 tile_instances_arc,
                 lazy_pipeline_arc: Default::default(),
             },
-            canvas: CanvasOverlay::new(),
+            overlay: CanvasOverlay::new(),
         }
     }
 
     pub fn set_tile_instances(&mut self, tile_instances_arc: Arc<Vec<TileInstance>>) {
-        self.program.tile_instances_arc = tile_instances_arc;
+        self.gfx_program.tile_instances_arc = tile_instances_arc;
     }
 
     pub fn get_tile_instances(&self) -> Arc<Vec<TileInstance>> {
-        self.program.tile_instances_arc.clone()
+        self.gfx_program.tile_instances_arc.clone()
     }
 
     pub fn update(&mut self, message: PrivateMessage) -> Option<PublicMessage> {
         match message.0 {
             Message::CursorMoved(tile_hovered) => {
-                self.canvas.tile_hovered = Some(tile_hovered);
-                self.canvas.request_redraw();
+                self.overlay.tile_hovered = Some(tile_hovered);
+                self.overlay.request_redraw();
                 None
             }
             Message::LeftButtonPressedInside => {
-                if let Some(tile_hovered) = self.canvas.tile_hovered {
-                    self.canvas.tile_mouse_pressed_on = Some(tile_hovered)
+                if let Some(tile_hovered) = self.overlay.tile_hovered {
+                    self.overlay.tile_mouse_pressed_on = Some(tile_hovered)
                 }
                 None
             }
             Message::LeftButtonReleasedInside => {
-                if let (Some(tile_mouse_pressed_on), Some(tile_hovered)) =
-                    (self.canvas.tile_mouse_pressed_on, self.canvas.tile_hovered)
-                {
+                if let (Some(tile_mouse_pressed_on), Some(tile_hovered)) = (
+                    self.overlay.tile_mouse_pressed_on,
+                    self.overlay.tile_hovered,
+                ) {
                     if tile_mouse_pressed_on == tile_hovered {
                         Some(PublicMessage::TileClicked(tile_hovered))
                     } else {
@@ -98,9 +99,9 @@ impl Component {
                 }
             }
             Message::CursorExited => {
-                self.canvas.tile_mouse_pressed_on = None;
-                self.canvas.tile_hovered = None;
-                self.canvas.request_redraw();
+                self.overlay.tile_mouse_pressed_on = None;
+                self.overlay.tile_hovered = None;
+                self.overlay.request_redraw();
                 None
             }
         }
@@ -109,7 +110,7 @@ impl Component {
     pub fn view(&self, dimens_in_tiles: Option<TileCoords>) -> Element<PrivateMessage> {
         use iced::widget::*;
 
-        let instance_count = self.program.tile_instances_arc.len();
+        let instance_count = self.gfx_program.tile_instances_arc.len();
         let quad_count = instance_count.div_ceil(4);
         let (quad_columns, quad_rows) = if let Some(dimens_in_tiles) = dimens_in_tiles {
             (dimens_in_tiles.0 / 2, dimens_in_tiles.1 / 2)
@@ -122,8 +123,10 @@ impl Component {
         let height = (quad_rows * gfx_pixels_per_quad * screen_pixels_per_gfx_pixel) as u16;
 
         mouse_area(stack!(
-            shader_element(&self.program).width(width).height(height),
-            canvas(&self.canvas).width(width).height(height)
+            shader_element(&self.gfx_program)
+                .width(width)
+                .height(height),
+            canvas(&self.overlay).width(width).height(height)
         ))
         .on_press(PrivateMessage(Message::LeftButtonPressedInside))
         .on_release(PrivateMessage(Message::LeftButtonReleasedInside))
