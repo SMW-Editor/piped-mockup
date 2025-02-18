@@ -29,8 +29,6 @@ pub struct TileCoords(pub u32, pub u32);
 pub struct Component {
     program: Program,
     canvas: CanvasOverlay,
-    tile_hovered: Option<TileCoords>,
-    tile_mouse_pressed_on: Option<TileCoords>,
 }
 /// These are messages that parent is expected to want to handle.
 #[derive(Debug, Clone, Copy)]
@@ -62,8 +60,6 @@ impl Component {
                 lazy_pipeline_arc: Default::default(),
             },
             canvas: CanvasOverlay::new(),
-            tile_hovered: None,
-            tile_mouse_pressed_on: None,
         }
     }
 
@@ -78,18 +74,19 @@ impl Component {
     pub fn update(&mut self, message: PrivateMessage) -> Option<PublicMessage> {
         match message.0 {
             Message::CursorMoved(tile_hovered) => {
-                self.tile_hovered = Some(tile_hovered);
+                self.canvas.tile_hovered = Some(tile_hovered);
+                self.canvas.request_redraw();
                 None
             }
             Message::LeftButtonPressedInside => {
-                if let Some(tile_hovered) = self.tile_hovered {
-                    self.tile_mouse_pressed_on = Some(tile_hovered)
+                if let Some(tile_hovered) = self.canvas.tile_hovered {
+                    self.canvas.tile_mouse_pressed_on = Some(tile_hovered)
                 }
                 None
             }
             Message::LeftButtonReleasedInside => {
                 if let (Some(tile_mouse_pressed_on), Some(tile_hovered)) =
-                    (self.tile_mouse_pressed_on, self.tile_hovered)
+                    (self.canvas.tile_mouse_pressed_on, self.canvas.tile_hovered)
                 {
                     if tile_mouse_pressed_on == tile_hovered {
                         Some(PublicMessage::TileClicked(tile_hovered))
@@ -101,7 +98,9 @@ impl Component {
                 }
             }
             Message::CursorExited => {
-                self.tile_mouse_pressed_on = None;
+                self.canvas.tile_mouse_pressed_on = None;
+                self.canvas.tile_hovered = None;
+                self.canvas.request_redraw();
                 None
             }
         }
@@ -505,14 +504,21 @@ fn create_instance_buffer(
 }
 
 struct CanvasOverlay {
-    canvas_cache: canvas::Cache,
+    pub canvas_cache: canvas::Cache,
+    pub tile_hovered: Option<TileCoords>,
+    pub tile_mouse_pressed_on: Option<TileCoords>,
 }
 
 impl CanvasOverlay {
     pub fn new() -> Self {
         Self {
             canvas_cache: canvas::Cache::default(),
+            tile_hovered: None,
+            tile_mouse_pressed_on: None,
         }
+    }
+    pub fn request_redraw(&mut self) {
+        self.canvas_cache.clear();
     }
 }
 
@@ -528,23 +534,28 @@ impl<Message> canvas::Program<Message> for CanvasOverlay {
         _cursor: iced::mouse::Cursor,
     ) -> Vec<canvas::Geometry<Renderer>> {
         vec![self.canvas_cache.draw(renderer, bounds.size(), |frame| {
-            let stroke_width = 4.;
-            let half_stroke_width = stroke_width / 2.;
-            frame.stroke_rectangle(
-                // Subtract 0.5 in order to get the canvas rectangle to more accurately position
-                // itself over the pixels it's supposed to be surrounding, depending on the exact
-                // layout position. This is required because the canvas allows subpixel positioning
-                // with antialiasing.
-                Point::new(32. - half_stroke_width - 0.5, 32. - half_stroke_width - 0.5),
-                Size::new(16. + stroke_width, 16. + stroke_width),
-                Stroke {
-                    // Add a little to the visible stroke width so that even with antialiasing,
-                    // the rectangle will not reveal any pixels of the surrounding tiles.
-                    width: stroke_width + 1.,
-                    style: Color::new(0.5, 0.5, 0.5, 1.).into(),
-                    ..Default::default()
-                },
-            );
+            if let Some(tile_hovered) = self.tile_hovered {
+                let stroke_width = 2.;
+                let half_stroke_width = stroke_width / 2.;
+                frame.stroke_rectangle(
+                    // Subtract 0.5 in order to get the canvas rectangle to more accurately position
+                    // itself over the pixels it's supposed to be surrounding, depending on the exact
+                    // layout position. This is required because the canvas allows subpixel positioning
+                    // with antialiasing.
+                    Point::new(
+                        tile_hovered.0 as f32 * 16. - half_stroke_width - 0.5,
+                        tile_hovered.1 as f32 * 16. - half_stroke_width - 0.5,
+                    ),
+                    Size::new(16. + stroke_width, 16. + stroke_width),
+                    Stroke {
+                        // Add a little to the visible stroke width so that even with antialiasing,
+                        // the rectangle will not reveal any pixels of the surrounding tiles.
+                        width: stroke_width + 1.,
+                        style: Color::new(0.5, 0.5, 0.5, 1.).into(),
+                        ..Default::default()
+                    },
+                );
+            }
         })]
     }
 }

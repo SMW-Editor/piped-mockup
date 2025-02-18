@@ -127,8 +127,10 @@ impl App {
             }
             Message::DisplayGraphicsFile(file_index) => {
                 let file = self.graphics_files.get(file_index).unwrap();
-                if let Some(tilemap_component) = self.displayed_graphics_file_component.as_mut() {
-                    tilemap_component
+                if let Some(displayed_graphics_file_component) =
+                    self.displayed_graphics_file_component.as_mut()
+                {
+                    displayed_graphics_file_component
                         .set_tile_instances(file.layout_all_tile_instances_from_file());
                 } else {
                     self.displayed_graphics_file_component = Some(tilemap::Component::new(
@@ -146,8 +148,10 @@ impl App {
                 Message::GraphicsFileLoaded,
             )]),
             Message::FromDisplayedGraphicsFile(m) => {
-                if let Some(tilemap_component) = self.displayed_graphics_file_component.as_mut() {
-                    match tilemap_component.update(m) {
+                if let Some(displayed_graphics_file_component) =
+                    self.displayed_graphics_file_component.as_mut()
+                {
+                    match displayed_graphics_file_component.update(m) {
                         Some(tilemap::PublicMessage::TileClicked(tile_coords)) => {
                             println!("Selected {tile_coords:?}");
                             self.brush = tile_coords;
@@ -158,22 +162,21 @@ impl App {
                 Task::none()
             }
             Message::FromDisplayedBlockLibrary(m) => {
-                if let Some(graphics_file_component) =
-                    self.displayed_graphics_file_component.as_mut()
-                {
-                    match graphics_file_component.update(m) {
+                if let Some(displayed_block_library) = self.displayed_block_library.as_mut() {
+                    match displayed_block_library.update(m) {
                         Some(tilemap::PublicMessage::TileClicked(clicked_tile_coords)) => {
                             let brush = self.brush;
                             println!("Painting {clicked_tile_coords:?} with {brush:?}");
-                            if let Some(displayed_block_library) =
-                                self.displayed_block_library.as_mut()
+                            if let Some(displayed_graphics_file_component) =
+                                self.displayed_graphics_file_component.as_mut()
                             {
-                                let mut copy_of_tile_from_graphics_file = graphics_file_component
-                                    .get_tile_instances()
-                                    .iter()
-                                    .find(|tile| tile.get_tile_coords() == brush)
-                                    .unwrap()
-                                    .clone();
+                                let mut copy_of_tile_from_graphics_file =
+                                    displayed_graphics_file_component
+                                        .get_tile_instances()
+                                        .iter()
+                                        .find(|tile| tile.get_tile_coords() == brush)
+                                        .unwrap()
+                                        .clone();
                                 copy_of_tile_from_graphics_file
                                     .move_to_tile_coords(clicked_tile_coords);
                                 displayed_block_library.set_tile_instances(Arc::new({
