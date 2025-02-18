@@ -26,16 +26,13 @@ use iced::widget::shader as shader_element;
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct TileCoords(pub u32, pub u32);
 
-pub struct Component {
-    gfx_program: Program,
-    overlay: CanvasOverlay,
-}
 /// These are messages that parent is expected to want to handle.
 #[derive(Debug, Clone, Copy)]
 pub enum PublicMessage {
     /// Raised when user presses then releases on the same tile.
     TileClicked(TileCoords),
 }
+
 /// Parent of this component should pass this Envelope to the Component::update function, which may return a PublicMessage.
 #[derive(Debug, Clone, Copy)]
 pub struct Envelope(PrivateMessage);
@@ -48,27 +45,31 @@ enum PrivateMessage {
     CursorExited,
 }
 
+pub struct Component {
+    gfx_program: TilemapProgram,
+    overlay: CanvasOverlay,
+}
 impl Component {
     pub fn new(
-        graphics_bytes_arc: Arc<RwLock<Vec<u8>>>,
-        tile_instances_arc: Arc<Vec<TileInstance>>,
+        graphics_bytes: Arc<RwLock<Vec<u8>>>,
+        tile_instances: Arc<Vec<TileInstance>>,
     ) -> Self {
         Self {
-            gfx_program: Program {
-                graphics_bytes_arc,
-                tile_instances_arc,
-                lazy_pipeline_arc: Default::default(),
+            gfx_program: TilemapProgram {
+                graphics_bytes,
+                tile_instances,
+                pipeline: Default::default(),
             },
             overlay: CanvasOverlay::new(),
         }
     }
 
-    pub fn set_tile_instances(&mut self, tile_instances_arc: Arc<Vec<TileInstance>>) {
-        self.gfx_program.tile_instances_arc = tile_instances_arc;
+    pub fn set_tile_instances(&mut self, tile_instances: Arc<Vec<TileInstance>>) {
+        self.gfx_program.tile_instances = tile_instances;
     }
 
     pub fn get_tile_instances(&self) -> Arc<Vec<TileInstance>> {
-        self.gfx_program.tile_instances_arc.clone()
+        self.gfx_program.tile_instances.clone()
     }
 
     pub fn set_brush(&mut self, brush: Option<TileCoords>) {
@@ -119,7 +120,7 @@ impl Component {
     pub fn view(&self, dimens_in_tiles: Option<TileCoords>) -> Element<Envelope> {
         use iced::widget::*;
 
-        let instance_count = self.gfx_program.tile_instances_arc.len();
+        let instance_count = self.gfx_program.tile_instances.len();
         let quad_count = instance_count.div_ceil(4);
         let (quad_columns, quad_rows) = if let Some(dimens_in_tiles) = dimens_in_tiles {
             (dimens_in_tiles.0 / 2, dimens_in_tiles.1 / 2)
@@ -150,17 +151,19 @@ impl Component {
     }
 }
 
-struct Program {
-    graphics_bytes_arc: Arc<RwLock<Vec<u8>>>,
-    tile_instances_arc: Arc<Vec<TileInstance>>,
-    lazy_pipeline_arc: LazyPipelineArc,
+type LazyPipelineArc = Arc<RwLock<Option<TilemapShaderPipeline>>>;
+
+struct TilemapProgram {
+    graphics_bytes: Arc<RwLock<Vec<u8>>>,
+    tile_instances: Arc<Vec<TileInstance>>,
+    pipeline: LazyPipelineArc,
 }
-impl shader::Program<Envelope> for Program {
+impl shader::Program<Envelope> for TilemapProgram {
     // This State type is what Iced puts in its widget tree, and passed to the update and draw
     // functions. We aren't using it, as it is initialized using Default, and for now we want to
     // manage our state ourselves in the app model.
     type State = ();
-    type Primitive = FrameInfo;
+    type Primitive = TilemapFrameInfo;
 
     fn update(
         &self,
@@ -174,10 +177,10 @@ impl shader::Program<Envelope> for Program {
     }
 
     fn draw(&self, _: &Self::State, _: mouse::Cursor, _: Rectangle) -> Self::Primitive {
-        FrameInfo {
-            graphics_bytes_arc: self.graphics_bytes_arc.clone(),
-            tile_instances_arc: self.tile_instances_arc.clone(),
-            lazy_pipeline_arc: self.lazy_pipeline_arc.clone(),
+        TilemapFrameInfo {
+            graphics_bytes: self.graphics_bytes.clone(),
+            tile_instances: self.tile_instances.clone(),
+            pipeline: self.pipeline.clone(),
         }
     }
 }
@@ -218,12 +221,12 @@ impl TileInstance {
 
 /// Created every frame, and has the ability to set stuff on the pipeline.
 #[derive(Debug)]
-pub struct FrameInfo {
-    graphics_bytes_arc: Arc<RwLock<Vec<u8>>>,
-    tile_instances_arc: Arc<Vec<TileInstance>>,
-    lazy_pipeline_arc: LazyPipelineArc,
+pub struct TilemapFrameInfo {
+    graphics_bytes: Arc<RwLock<Vec<u8>>>,
+    tile_instances: Arc<Vec<TileInstance>>,
+    pipeline: LazyPipelineArc,
 }
-impl shader::Primitive for FrameInfo {
+impl shader::Primitive for TilemapFrameInfo {
     fn prepare(
         &self,
         device: &wgpu::Device,
@@ -238,24 +241,24 @@ impl shader::Primitive for FrameInfo {
         // our own component state.
         if !storage.has::<TilemapShaderPipeline>() {
             storage.store(TilemapShaderPipeline::new(
-                self.graphics_bytes_arc.clone(),
+                self.graphics_bytes.clone(),
                 device,
                 format,
             ));
         }
         let pipeline = storage.get_mut::<TilemapShaderPipeline>().unwrap();
         */
-        let mut pipeline_rw = self.lazy_pipeline_arc.write().unwrap();
+        let mut pipeline_rw = self.pipeline.write().unwrap();
         let pipeline = pipeline_rw.get_or_insert_with(|| {
             println!(
                 "Creating pipeline, this many bytes total: {}",
-                self.graphics_bytes_arc.read().unwrap().len()
+                self.graphics_bytes.read().unwrap().len()
             );
             TilemapShaderPipeline::new_and_create_wgpu_pipeline(
                 device,
                 format,
-                self.graphics_bytes_arc.clone(),
-                self.tile_instances_arc.clone(),
+                self.graphics_bytes.clone(),
+                self.tile_instances.clone(),
             )
         });
         pipeline.write_uniforms(
@@ -265,8 +268,8 @@ impl shader::Primitive for FrameInfo {
                 padding: 0,
             },
         );
-        pipeline.replace_graphics_buffer_if_needed(device, &self.graphics_bytes_arc);
-        pipeline.write_tile_instances_if_needed(device, queue, &self.tile_instances_arc);
+        pipeline.replace_graphics_buffer_if_needed(device, &self.graphics_bytes);
+        pipeline.write_tile_instances_if_needed(device, queue, &self.tile_instances);
     }
 
     fn render(
@@ -277,7 +280,7 @@ impl shader::Primitive for FrameInfo {
         clip_bounds: &Rectangle<u32>,
     ) {
         //let pipeline = storage.get::<TilemapShaderPipeline>().unwrap();
-        self.lazy_pipeline_arc
+        self.pipeline
             .read()
             .unwrap()
             .as_ref()
@@ -286,13 +289,11 @@ impl shader::Primitive for FrameInfo {
     }
 }
 
-type LazyPipelineArc = Arc<RwLock<Option<TilemapShaderPipeline>>>;
-
 /// Created once then memoized. Creates the WGPU pipeline upon construction, and gives us
 /// continuing access to the WGPU pipeline later on.
 #[derive(Debug)]
 struct TilemapShaderPipeline {
-    tile_instances_arc: Arc<Vec<TileInstance>>,
+    tile_instances: Arc<Vec<TileInstance>>,
     pipeline: wgpu::RenderPipeline,
     instance_buffer: wgpu::Buffer,
     palette_buffer: wgpu::Buffer,
@@ -304,8 +305,8 @@ impl TilemapShaderPipeline {
     fn new_and_create_wgpu_pipeline(
         device: &wgpu::Device,
         format: wgpu::TextureFormat,
-        graphics_bytes_arc: Arc<RwLock<Vec<u8>>>,
-        tile_instances_arc: Arc<Vec<TileInstance>>,
+        graphics_bytes: Arc<RwLock<Vec<u8>>>,
+        tile_instances: Arc<Vec<TileInstance>>,
     ) -> Self {
         let shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
             label: Some("tilemap shader module"),
@@ -315,7 +316,7 @@ impl TilemapShaderPipeline {
         });
 
         let pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
-            label: Some("tilemap shader pipeline"),
+            label: Some("tilemap render pipeline"),
             layout: None,
             vertex: wgpu::VertexState {
                 module: &shader,
@@ -360,7 +361,7 @@ impl TilemapShaderPipeline {
             usage: wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_DST,
         });
 
-        let graphics_buffer = create_graphics_buffer(device, &graphics_bytes_arc.read().unwrap());
+        let graphics_buffer = create_graphics_buffer(device, &graphics_bytes.read().unwrap());
         let uniform_buffer = device.create_buffer(&wgpu::BufferDescriptor {
             label: Some("tilemap uniform buffer"),
             size: std::mem::size_of::<Uniforms>() as _,
@@ -374,11 +375,11 @@ impl TilemapShaderPipeline {
             &graphics_buffer,
             &uniform_buffer,
         );
-        let instance_buffer = create_instance_buffer(&device, &tile_instances_arc);
+        let instance_buffer = create_instance_buffer(&device, &tile_instances);
 
         Self {
             pipeline,
-            tile_instances_arc,
+            tile_instances,
             uniform_buffer,
             instance_buffer,
             palette_buffer,
@@ -415,19 +416,19 @@ impl TilemapShaderPipeline {
         &mut self,
         device: &wgpu::Device,
         queue: &wgpu::Queue,
-        tile_instances_arc: &Arc<Vec<TileInstance>>,
+        tile_instances: &Arc<Vec<TileInstance>>,
     ) {
-        if !Arc::ptr_eq(&self.tile_instances_arc, tile_instances_arc) {
-            if self.tile_instances_arc.len() != tile_instances_arc.len() {
+        if !Arc::ptr_eq(&self.tile_instances, tile_instances) {
+            if self.tile_instances.len() != tile_instances.len() {
                 println!("Tile instances buffer size changed, creating new one.");
 
-                self.instance_buffer = create_instance_buffer(&device, &tile_instances_arc);
-                self.tile_instances_arc = tile_instances_arc.clone();
+                self.instance_buffer = create_instance_buffer(&device, &tile_instances);
+                self.tile_instances = tile_instances.clone();
             } else {
                 queue.write_buffer(
                     &self.instance_buffer,
                     0,
-                    bytemuck::cast_slice(tile_instances_arc),
+                    bytemuck::cast_slice(tile_instances),
                 );
             }
         }
@@ -466,14 +467,14 @@ impl TilemapShaderPipeline {
         pass.set_bind_group(0, &self.bind_group, &[]);
         pass.set_vertex_buffer(0, self.instance_buffer.slice(..));
 
-        pass.draw(0..4, 0..self.tile_instances_arc.len() as u32);
+        pass.draw(0..4, 0..self.tile_instances.len() as u32);
     }
 }
 
-fn create_graphics_buffer(device: &wgpu::Device, graphics_bytes_arc: &Vec<u8>) -> wgpu::Buffer {
+fn create_graphics_buffer(device: &wgpu::Device, graphics_bytes: &Vec<u8>) -> wgpu::Buffer {
     device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
         label: Some("tilemap graphics buffer"),
-        contents: graphics_bytes_arc,
+        contents: graphics_bytes,
         usage: wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_DST,
     })
 }

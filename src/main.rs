@@ -6,8 +6,6 @@ use std::{
     sync::{Arc, RwLock},
 };
 
-use palette::Palette;
-
 use iced::{application, window, Alignment, Element, Length, Point, Settings, Task, Theme};
 use tilemap::{TileCoords, TileInstance};
 
@@ -27,7 +25,7 @@ fn main() -> iced::Result {
 
 struct App {
     displayed_graphics_file_component: Option<tilemap::Component>,
-    palette_selector: Palette,
+    palette_selector: palette::Component,
     graphics_files: Vec<GraphicsFile>,
     all_graphics_bytes: Arc<RwLock<Vec<u8>>>,
     displayed_block_library: Option<tilemap::Component>,
@@ -51,7 +49,7 @@ impl App {
         (
             App {
                 displayed_graphics_file_component: None,
-                palette_selector: Palette::new(),
+                palette_selector: palette::Component::new(),
                 graphics_files: vec![],
                 all_graphics_bytes: Arc::new(RwLock::new(vec![])),
                 displayed_block_library: None,
