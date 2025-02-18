@@ -37,8 +37,8 @@ struct App {
 #[allow(dead_code)]
 #[derive(Debug, Clone)]
 enum Message {
-    FromDisplayedGraphicsFile(tilemap::PrivateMessage),
-    FromDisplayedBlockLibrary(tilemap::PrivateMessage),
+    FromDisplayedGraphicsFile(tilemap::Envelope),
+    FromDisplayedBlockLibrary(tilemap::Envelope),
     FromPaletteSelector(palette_program::Message),
     GraphicsFileLoaded(Option<(PathBuf, Arc<Vec<u8>>)>),
     DisplayGraphicsFile(usize),

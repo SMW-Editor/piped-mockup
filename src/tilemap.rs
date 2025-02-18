@@ -36,12 +36,12 @@ pub enum PublicMessage {
     /// Raised when user presses then releases on the same tile.
     TileClicked(TileCoords),
 }
-/// Parent of this component should pass this PrivateMessage to the Component::update function, which may return a PublicMessage.
+/// Parent of this component should pass this Envelope to the Component::update function, which may return a PublicMessage.
 #[derive(Debug, Clone, Copy)]
-pub struct PrivateMessage(Message);
+pub struct Envelope(PrivateMessage);
 
 #[derive(Debug, Clone, Copy)]
-enum Message {
+enum PrivateMessage {
     CursorMoved(TileCoords),
     LeftButtonPressedInside,
     LeftButtonReleasedInside,
@@ -80,20 +80,20 @@ impl Component {
         self.overlay.brush_tile
     }
 
-    pub fn update(&mut self, message: PrivateMessage) -> Option<PublicMessage> {
+    pub fn update(&mut self, message: Envelope) -> Option<PublicMessage> {
         match message.0 {
-            Message::CursorMoved(tile_hovered) => {
+            PrivateMessage::CursorMoved(tile_hovered) => {
                 self.overlay.tile_hovered = Some(tile_hovered);
                 self.overlay.request_redraw();
                 None
             }
-            Message::LeftButtonPressedInside => {
+            PrivateMessage::LeftButtonPressedInside => {
                 if let Some(tile_hovered) = self.overlay.tile_hovered {
                     self.overlay.tile_mouse_pressed_on = Some(tile_hovered)
                 }
                 None
             }
-            Message::LeftButtonReleasedInside => {
+            PrivateMessage::LeftButtonReleasedInside => {
                 if let (Some(tile_mouse_pressed_on), Some(tile_hovered)) = (
                     self.overlay.tile_mouse_pressed_on,
                     self.overlay.tile_hovered,
@@ -107,7 +107,7 @@ impl Component {
                     None
                 }
             }
-            Message::CursorExited => {
+            PrivateMessage::CursorExited => {
                 self.overlay.tile_mouse_pressed_on = None;
                 self.overlay.tile_hovered = None;
                 self.overlay.request_redraw();
@@ -116,7 +116,7 @@ impl Component {
         }
     }
 
-    pub fn view(&self, dimens_in_tiles: Option<TileCoords>) -> Element<PrivateMessage> {
+    pub fn view(&self, dimens_in_tiles: Option<TileCoords>) -> Element<Envelope> {
         use iced::widget::*;
 
         let instance_count = self.gfx_program.tile_instances_arc.len();
@@ -137,11 +137,11 @@ impl Component {
                 .height(height),
             canvas(&self.overlay).width(width).height(height)
         ))
-        .on_press(PrivateMessage(Message::LeftButtonPressedInside))
-        .on_release(PrivateMessage(Message::LeftButtonReleasedInside))
-        .on_exit(PrivateMessage(Message::CursorExited))
+        .on_press(Envelope(PrivateMessage::LeftButtonPressedInside))
+        .on_release(Envelope(PrivateMessage::LeftButtonReleasedInside))
+        .on_exit(Envelope(PrivateMessage::CursorExited))
         .on_move(|point| {
-            PrivateMessage(Message::CursorMoved(TileCoords(
+            Envelope(PrivateMessage::CursorMoved(TileCoords(
                 (point.x / 16.) as u32,
                 (point.y / 16.) as u32,
             )))
@@ -155,7 +155,7 @@ struct Program {
     tile_instances_arc: Arc<Vec<TileInstance>>,
     lazy_pipeline_arc: LazyPipelineArc,
 }
-impl shader::Program<PrivateMessage> for Program {
+impl shader::Program<Envelope> for Program {
     // This State type is what Iced puts in its widget tree, and passed to the update and draw
     // functions. We aren't using it, as it is initialized using Default, and for now we want to
     // manage our state ourselves in the app model.
@@ -168,8 +168,8 @@ impl shader::Program<PrivateMessage> for Program {
         _event: Event,
         _bounds: Rectangle,
         _cursor: Cursor,
-        _: &mut Shell<'_, PrivateMessage>,
-    ) -> (Status, Option<PrivateMessage>) {
+        _: &mut Shell<'_, Envelope>,
+    ) -> (Status, Option<Envelope>) {
         (Status::Ignored, None)
     }
 
