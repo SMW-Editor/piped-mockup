@@ -1,4 +1,4 @@
-mod palette_program;
+mod palette;
 mod tilemap;
 
 use std::{
@@ -6,7 +6,7 @@ use std::{
     sync::{Arc, RwLock},
 };
 
-use palette_program::Palette;
+use palette::Palette;
 
 use iced::{application, window, Alignment, Element, Length, Point, Settings, Task, Theme};
 use tilemap::{TileCoords, TileInstance};
@@ -39,7 +39,7 @@ struct App {
 enum Message {
     FromDisplayedGraphicsFile(tilemap::Envelope),
     FromDisplayedBlockLibrary(tilemap::Envelope),
-    FromPaletteSelector(palette_program::Message),
+    FromPaletteSelector(palette::Message),
     GraphicsFileLoaded(Option<(PathBuf, Arc<Vec<u8>>)>),
     DisplayGraphicsFile(usize),
     LoadMoreGraphicsFiles,
