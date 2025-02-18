@@ -71,6 +71,15 @@ impl Component {
         self.gfx_program.tile_instances_arc.clone()
     }
 
+    pub fn set_brush(&mut self, brush: Option<TileCoords>) {
+        self.overlay.brush_tile = brush;
+        self.overlay.request_redraw();
+    }
+
+    pub fn get_brush(&self) -> Option<TileCoords> {
+        self.overlay.brush_tile
+    }
+
     pub fn update(&mut self, message: PrivateMessage) -> Option<PublicMessage> {
         match message.0 {
             Message::CursorMoved(tile_hovered) => {
@@ -510,6 +519,7 @@ struct CanvasOverlay {
     pub canvas_cache: canvas::Cache,
     pub tile_hovered: Option<TileCoords>,
     pub tile_mouse_pressed_on: Option<TileCoords>,
+    pub brush_tile: Option<TileCoords>,
 }
 
 impl CanvasOverlay {
@@ -518,6 +528,7 @@ impl CanvasOverlay {
             canvas_cache: canvas::Cache::default(),
             tile_hovered: None,
             tile_mouse_pressed_on: None,
+            brush_tile: None,
         }
     }
     pub fn request_redraw(&mut self) {
@@ -555,6 +566,29 @@ impl<Message> canvas::Program<Message> for CanvasOverlay {
                         // the rectangle will not reveal any pixels of the surrounding tiles.
                         width: stroke_width + 1.,
                         style: Color::new(0.5, 0.5, 0.5, 1.).into(),
+                        ..Default::default()
+                    },
+                );
+            }
+
+            if let Some(brush_tile) = self.brush_tile {
+                let stroke_width = 2.;
+                let half_stroke_width = stroke_width / 2.;
+                frame.stroke_rectangle(
+                    // Subtract 0.5 in order to get the canvas rectangle to more accurately position
+                    // itself over the pixels it's supposed to be surrounding, depending on the exact
+                    // layout position. This is required because the canvas allows subpixel positioning
+                    // with antialiasing.
+                    Point::new(
+                        brush_tile.0 as f32 * 16. - half_stroke_width - 0.5,
+                        brush_tile.1 as f32 * 16. - half_stroke_width - 0.5,
+                    ),
+                    Size::new(16. + stroke_width, 16. + stroke_width),
+                    Stroke {
+                        // Add a little to the visible stroke width so that even with antialiasing,
+                        // the rectangle will not reveal any pixels of the surrounding tiles.
+                        width: stroke_width + 1.,
+                        style: Color::new(0.9, 0.9, 0.9, 1.).into(),
                         ..Default::default()
                     },
                 );

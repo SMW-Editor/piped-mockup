@@ -31,7 +31,6 @@ struct App {
     graphics_files: Vec<GraphicsFile>,
     all_graphics_bytes: Arc<RwLock<Vec<u8>>>,
     displayed_block_library: Option<tilemap::Component>,
-    brush: TileCoords,
 }
 
 #[allow(clippy::enum_variant_names)]
@@ -56,7 +55,6 @@ impl App {
                 graphics_files: vec![],
                 all_graphics_bytes: Arc::new(RwLock::new(vec![])),
                 displayed_block_library: None,
-                brush: TileCoords(0, 0),
             },
             Task::batch([
                 Task::perform(
@@ -154,7 +152,7 @@ impl App {
                     match displayed_graphics_file_component.update(m) {
                         Some(tilemap::PublicMessage::TileClicked(tile_coords)) => {
                             println!("Selected {tile_coords:?}");
-                            self.brush = tile_coords;
+                            displayed_graphics_file_component.set_brush(Some(tile_coords));
                         }
                         None => {}
                     }
@@ -165,44 +163,45 @@ impl App {
                 if let Some(displayed_block_library) = self.displayed_block_library.as_mut() {
                     match displayed_block_library.update(m) {
                         Some(tilemap::PublicMessage::TileClicked(clicked_tile_coords)) => {
-                            let brush = self.brush;
-                            println!("Painting {clicked_tile_coords:?} with {brush:?}");
                             if let Some(displayed_graphics_file_component) =
                                 self.displayed_graphics_file_component.as_mut()
                             {
-                                let mut copy_of_tile_from_graphics_file =
-                                    displayed_graphics_file_component
-                                        .get_tile_instances()
-                                        .iter()
-                                        .find(|tile| tile.get_tile_coords() == brush)
-                                        .unwrap()
-                                        .clone();
-                                copy_of_tile_from_graphics_file
-                                    .move_to_tile_coords(clicked_tile_coords);
-                                displayed_block_library.set_tile_instances(Arc::new({
-                                    let mut found = false;
-                                    let mut new_tile_instances_for_block_library =
-                                        displayed_block_library
+                                if let Some(brush) = displayed_graphics_file_component.get_brush() {
+                                    println!("Painting {clicked_tile_coords:?} with {brush:?}");
+                                    let mut copy_of_tile_from_graphics_file =
+                                        displayed_graphics_file_component
                                             .get_tile_instances()
                                             .iter()
-                                            .cloned()
-                                            .map(|tile_in_block_library| {
-                                                if tile_in_block_library.get_tile_coords()
-                                                    == clicked_tile_coords
-                                                {
-                                                    found = true;
-                                                    copy_of_tile_from_graphics_file
-                                                } else {
-                                                    tile_in_block_library
-                                                }
-                                            })
-                                            .collect::<Vec<TileInstance>>();
-                                    if !found {
+                                            .find(|tile| tile.get_tile_coords() == brush)
+                                            .unwrap()
+                                            .clone();
+                                    copy_of_tile_from_graphics_file
+                                        .move_to_tile_coords(clicked_tile_coords);
+                                    displayed_block_library.set_tile_instances(Arc::new({
+                                        let mut found = false;
+                                        let mut new_tile_instances_for_block_library =
+                                            displayed_block_library
+                                                .get_tile_instances()
+                                                .iter()
+                                                .cloned()
+                                                .map(|tile_in_block_library| {
+                                                    if tile_in_block_library.get_tile_coords()
+                                                        == clicked_tile_coords
+                                                    {
+                                                        found = true;
+                                                        copy_of_tile_from_graphics_file
+                                                    } else {
+                                                        tile_in_block_library
+                                                    }
+                                                })
+                                                .collect::<Vec<TileInstance>>();
+                                        if !found {
+                                            new_tile_instances_for_block_library
+                                                .push(copy_of_tile_from_graphics_file);
+                                        }
                                         new_tile_instances_for_block_library
-                                            .push(copy_of_tile_from_graphics_file);
-                                    }
-                                    new_tile_instances_for_block_library
-                                }));
+                                    }));
+                                }
                             }
                         }
                         None => {}
@@ -238,11 +237,6 @@ impl App {
                             Message::FromDisplayedBlockLibrary
                         ))
                     ),
-                    Space::with_height(Length::FillPortion(1)),
-                    container(text(
-                        self.brush.0.to_string() + ", " + &self.brush.1.to_string()
-                    ))
-                    .padding(10),
                     Space::with_height(Length::FillPortion(1)),
                     horizontal_rule(2),
                     heading("Palette"),
