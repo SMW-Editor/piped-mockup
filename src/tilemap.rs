@@ -39,7 +39,7 @@ pub struct Envelope(PrivateMessage);
 
 #[derive(Debug, Clone, Copy)]
 enum PrivateMessage {
-    CursorMoved(TileCoords),
+    CursorMovedOverTile(TileCoords),
     LeftButtonPressedInside,
     LeftButtonReleasedInside,
     CursorExited,
@@ -81,17 +81,15 @@ impl Component {
         self.overlay.brush_tile
     }
 
-    pub fn update(&mut self, message: Envelope) -> Option<PublicMessage> {
-        match message.0 {
-            PrivateMessage::CursorMoved(tile_hovered) => {
-                self.overlay.tile_hovered = Some(tile_hovered);
+    pub fn update(&mut self, envelope: Envelope) -> Option<PublicMessage> {
+        match envelope.0 {
+            PrivateMessage::CursorMovedOverTile(tile) => {
+                self.overlay.tile_hovered = Some(tile);
                 self.overlay.request_redraw();
                 None
             }
             PrivateMessage::LeftButtonPressedInside => {
-                if let Some(tile_hovered) = self.overlay.tile_hovered {
-                    self.overlay.tile_mouse_pressed_on = Some(tile_hovered)
-                }
+                self.overlay.tile_mouse_pressed_on = self.overlay.tile_hovered;
                 None
             }
             PrivateMessage::LeftButtonReleasedInside => {
@@ -142,7 +140,7 @@ impl Component {
         .on_release(Envelope(PrivateMessage::LeftButtonReleasedInside))
         .on_exit(Envelope(PrivateMessage::CursorExited))
         .on_move(|point| {
-            Envelope(PrivateMessage::CursorMoved(TileCoords(
+            Envelope(PrivateMessage::CursorMovedOverTile(TileCoords(
                 (point.x / 16.) as u32,
                 (point.y / 16.) as u32,
             )))
@@ -167,16 +165,21 @@ impl shader::Program<Envelope> for TilemapProgram {
 
     fn update(
         &self,
-        _: &mut Self::State,
+        _state: &mut Self::State,
         _event: Event,
         _bounds: Rectangle,
         _cursor: Cursor,
-        _: &mut Shell<'_, Envelope>,
+        _shell: &mut Shell<'_, Envelope>,
     ) -> (Status, Option<Envelope>) {
         (Status::Ignored, None)
     }
 
-    fn draw(&self, _: &Self::State, _: mouse::Cursor, _: Rectangle) -> Self::Primitive {
+    fn draw(
+        &self,
+        _state: &Self::State,
+        _cursor: mouse::Cursor,
+        _bounds: Rectangle,
+    ) -> Self::Primitive {
         TilemapFrameInfo {
             graphics_bytes: self.graphics_bytes.clone(),
             tile_instances: self.tile_instances.clone(),

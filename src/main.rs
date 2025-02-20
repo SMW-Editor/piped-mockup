@@ -143,11 +143,11 @@ impl App {
                 ))),
                 Message::GraphicsFileLoaded,
             )]),
-            Message::FromDisplayedGraphicsFile(m) => {
+            Message::FromDisplayedGraphicsFile(envelope) => {
                 if let Some(displayed_graphics_file_component) =
                     self.displayed_graphics_file_component.as_mut()
                 {
-                    match displayed_graphics_file_component.update(m) {
+                    match displayed_graphics_file_component.update(envelope) {
                         Some(tilemap::PublicMessage::TileClicked(tile_coords)) => {
                             println!("Selected {tile_coords:?}");
                             displayed_graphics_file_component.set_brush(Some(tile_coords));
@@ -157,9 +157,9 @@ impl App {
                 }
                 Task::none()
             }
-            Message::FromDisplayedBlockLibrary(m) => {
+            Message::FromDisplayedBlockLibrary(envelope) => {
                 if let Some(displayed_block_library) = self.displayed_block_library.as_mut() {
-                    match displayed_block_library.update(m) {
+                    match displayed_block_library.update(envelope) {
                         Some(tilemap::PublicMessage::TileClicked(clicked_tile_coords)) => {
                             if let Some(displayed_graphics_file_component) =
                                 self.displayed_graphics_file_component.as_mut()
