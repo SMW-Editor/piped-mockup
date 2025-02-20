@@ -6,7 +6,7 @@ use std::{
     sync::{Arc, RwLock},
 };
 
-use iced::{application, window, Alignment, Element, Length, Point, Settings, Task, Theme};
+use iced::{application, window, Alignment, Element, Length, Point, Settings, Size, Task, Theme};
 use tilemap::{TileCoords, TileInstance};
 
 fn main() -> iced::Result {
@@ -18,6 +18,7 @@ fn main() -> iced::Result {
         })
         .window(window::Settings {
             position: window::Position::Centered,
+            size: Size::new(1000., 1000.),
             ..Default::default()
         })
         .run_with(App::new)
@@ -37,7 +38,7 @@ struct App {
 enum Message {
     FromDisplayedGraphicsFile(tilemap::Envelope),
     FromDisplayedBlockLibrary(tilemap::Envelope),
-    FromPaletteSelector(palette::Message),
+    FromPaletteSelector(palette::Envelope),
     GraphicsFileLoaded(Option<(PathBuf, Arc<Vec<u8>>)>),
     DisplayGraphicsFile(usize),
     LoadMoreGraphicsFiles,
@@ -99,7 +100,9 @@ impl App {
                 if self.displayed_graphics_file_component.is_none() {
                     self.displayed_graphics_file_component = Some(tilemap::Component::new(
                         self.all_graphics_bytes.clone(),
-                        file.layout_all_tile_instances_from_file(),
+                        file.layout_all_tile_instances_from_file(
+                            self.palette_selector.selected_line,
+                        ),
                     ));
                     // Show single block
                     // self.displayed_block_library = Some(tilemap::Component::new(
@@ -126,12 +129,17 @@ impl App {
                 if let Some(displayed_graphics_file_component) =
                     self.displayed_graphics_file_component.as_mut()
                 {
-                    displayed_graphics_file_component
-                        .set_tile_instances(file.layout_all_tile_instances_from_file());
+                    displayed_graphics_file_component.set_tile_instances(
+                        file.layout_all_tile_instances_from_file(
+                            self.palette_selector.selected_line,
+                        ),
+                    );
                 } else {
                     self.displayed_graphics_file_component = Some(tilemap::Component::new(
                         self.all_graphics_bytes.clone(),
-                        file.layout_all_tile_instances_from_file(),
+                        file.layout_all_tile_instances_from_file(
+                            self.palette_selector.selected_line,
+                        ),
                     ));
                 }
                 Task::none()
@@ -207,7 +215,33 @@ impl App {
                 }
                 Task::none()
             }
-            Message::FromPaletteSelector(_) => Task::none(),
+            Message::FromPaletteSelector(envelope) => {
+                match self.palette_selector.update(envelope) {
+                    Some(palette::PublicMessage::PaletteLineClicked(line)) => {
+                        println!("PaletteLineClicked({line:?}");
+                        self.palette_selector.selected_line = line;
+
+                        if let Some(displayed_graphics_file_component) =
+                            self.displayed_graphics_file_component.as_mut()
+                        {
+                            displayed_graphics_file_component.set_tile_instances(Arc::new(
+                                displayed_graphics_file_component
+                                    .get_tile_instances()
+                                    .iter()
+                                    .cloned()
+                                    .map(|tile| {
+                                        let mut new_tile = tile.clone();
+                                        new_tile.pal = line as u8;
+                                        new_tile
+                                    })
+                                    .collect::<Vec<TileInstance>>(),
+                            ));
+                        }
+                    }
+                    None => {}
+                }
+                Task::none()
+            }
             Message::MouseMovedOverPalette(point) => {
                 println!("Moved in palette {:?}", point);
                 Task::none()
@@ -239,12 +273,7 @@ impl App {
                     horizontal_rule(2),
                     heading("Palette"),
                     Space::with_height(Length::FillPortion(1)),
-                    mouse_area(Element::map(
-                        self.palette_selector.view(),
-                        Message::FromPaletteSelector
-                    ),)
-                    .on_move(Message::MouseMovedOverPalette)
-                    .on_press(Message::MousePressedOverPalette),
+                    Element::map(self.palette_selector.view(), Message::FromPaletteSelector),
                     Space::with_height(Length::FillPortion(1)),
                 ]
                 .align_x(Alignment::Center)
@@ -302,7 +331,11 @@ struct GraphicsFile {
     offset_in_all_bytes: usize,
 }
 impl GraphicsFile {
-    fn layout_all_tile_instances_from_file(&self) -> Arc<Vec<tilemap::TileInstance>> {
+    fn layout_all_tile_instances_from_file(
+        &self,
+        palette_line: usize,
+    ) -> Arc<Vec<tilemap::TileInstance>> {
+        let pal = palette_line as u8;
         let mut tile_instances = vec![];
 
         // Each iteration of the below for-loop is a 2x2 grid of 4 tiles which here we will call a
@@ -330,7 +363,7 @@ impl GraphicsFile {
                 x: quad_left_x,
                 y: quad_top_y,
                 id: first_tile_id_of_quad,
-                pal: 3,
+                pal,
                 scale: 1,
                 flags: 0,
             });
@@ -338,7 +371,7 @@ impl GraphicsFile {
                 x: quad_left_x + 8,
                 y: quad_top_y,
                 id: first_tile_id_of_quad + 1,
-                pal: 3,
+                pal,
                 scale: 1,
                 flags: 0,
             });
@@ -346,7 +379,7 @@ impl GraphicsFile {
                 x: quad_left_x,
                 y: quad_top_y + 8,
                 id: first_tile_id_of_quad + 2,
-                pal: 3,
+                pal,
                 scale: 1,
                 flags: 0,
             });
@@ -354,7 +387,7 @@ impl GraphicsFile {
                 x: quad_left_x + 8,
                 y: quad_top_y + 8,
                 id: first_tile_id_of_quad + 3,
-                pal: 3,
+                pal,
                 scale: 1,
                 flags: 0,
             });

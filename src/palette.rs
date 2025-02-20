@@ -3,7 +3,7 @@ use std::sync::RwLock;
 
 use glam::Vec2;
 
-use iced::Point;
+use iced::widget::mouse_area;
 use iced::{
     advanced::Shell,
     event::Status,
@@ -15,26 +15,85 @@ use iced::{
 // We have to alias the shader element because it has the same name as the iced::widget::shader module, and the `self` syntax only imports the module.
 use iced::widget::shader as shader_element;
 
-#[allow(dead_code)]
+const PALETTE_ROWS: usize = 16;
+
 #[derive(Debug, Clone, Copy)]
-pub enum Message {
-    CursorMoved(Point),
+pub enum PublicMessage {
+    /// Raised when user presses then releases on the same palette line
+    PaletteLineClicked(usize),
+}
+
+/// Parent of this component should pass this Envelope to the Component::update function, which may return a PublicMessage.
+#[derive(Debug, Clone, Copy)]
+pub struct Envelope(PrivateMessage);
+
+#[derive(Debug, Clone, Copy)]
+enum PrivateMessage {
+    CursorMovedOverLine(usize),
+    LeftButtonPressedInside,
+    LeftButtonReleasedInside,
+    CursorExited,
 }
 
 pub struct Component {
+    pub selected_line: usize,
     palette_program: PaletteProgram,
+    line_hovered: Option<usize>,
+    line_mouse_pressed_on: Option<usize>,
 }
 impl Component {
     pub fn new() -> Self {
         Self {
+            selected_line: 3,
             palette_program: PaletteProgram::new(),
+            line_hovered: None,
+            line_mouse_pressed_on: None,
         }
     }
 
-    pub fn view(&self) -> Element<Message> {
-        shader_element(&self.palette_program)
-            .width(256)
-            .height(256)
+    pub fn update(&mut self, envelope: Envelope) -> Option<PublicMessage> {
+        match envelope.0 {
+            PrivateMessage::CursorMovedOverLine(line) => {
+                self.line_hovered = Some(line);
+                None
+            }
+            PrivateMessage::LeftButtonPressedInside => {
+                self.line_mouse_pressed_on = self.line_hovered;
+                None
+            }
+            PrivateMessage::LeftButtonReleasedInside => {
+                if let (Some(line_mouse_pressed_on), Some(line_hovered)) =
+                    (self.line_mouse_pressed_on, self.line_hovered)
+                {
+                    if line_mouse_pressed_on == line_hovered {
+                        Some(PublicMessage::PaletteLineClicked(line_hovered))
+                    } else {
+                        None
+                    }
+                } else {
+                    None
+                }
+            }
+            PrivateMessage::CursorExited => {
+                self.line_hovered = None;
+                self.line_mouse_pressed_on = None;
+                None
+            }
+        }
+    }
+
+    pub fn view(&self) -> Element<Envelope> {
+        let dim = 256;
+        mouse_area(shader_element(&self.palette_program).width(dim).height(dim))
+            .on_press(Envelope(PrivateMessage::LeftButtonPressedInside))
+            .on_release(Envelope(PrivateMessage::LeftButtonReleasedInside))
+            .on_exit(Envelope(PrivateMessage::CursorExited))
+            .on_move(move |point| {
+                println!("point: {point:?}");
+                Envelope(PrivateMessage::CursorMovedOverLine(
+                    ((point.y / dim as f32) * PALETTE_ROWS as f32) as _,
+                ))
+            })
             .into()
     }
 }
@@ -51,28 +110,18 @@ impl PaletteProgram {
         }
     }
 }
-impl shader::Program<Message> for PaletteProgram {
+impl shader::Program<Envelope> for PaletteProgram {
     type State = ();
     type Primitive = PaletteFrameInfo;
 
     fn update(
         &self,
         _state: &mut Self::State,
-        event: Event,
-        bounds: Rectangle,
-        cursor: Cursor,
-        _shell: &mut Shell<'_, Message>,
-    ) -> (Status, Option<Message>) {
-        #[allow(clippy::single_match)]
-        match event {
-            Event::Mouse(mouse::Event::CursorMoved { .. }) => {
-                if let Some(pos) = cursor.position_in(bounds) {
-                    return (Status::Ignored, Some(Message::CursorMoved(pos)));
-                }
-            }
-            _ => {}
-        };
-
+        _event: Event,
+        _bounds: Rectangle,
+        _cursor: Cursor,
+        _shell: &mut Shell<'_, Envelope>,
+    ) -> (Status, Option<Envelope>) {
         (Status::Ignored, None)
     }
 
