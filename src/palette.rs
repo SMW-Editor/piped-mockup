@@ -3,7 +3,12 @@ use std::sync::RwLock;
 
 use glam::Vec2;
 
-use iced::widget::mouse_area;
+use iced::widget::canvas;
+use iced::widget::stack;
+use iced::Color;
+use iced::Point;
+use iced::Renderer;
+use iced::Size;
 use iced::{
     advanced::Shell,
     event::Status,
@@ -38,6 +43,7 @@ enum PrivateMessage {
 pub struct Component {
     pub selected_line: usize,
     palette_program: PaletteProgram,
+    overlay: PaletteCanvasOverlay,
     line_hovered: Option<usize>,
     line_mouse_pressed_on: Option<usize>,
 }
@@ -46,6 +52,7 @@ impl Component {
         Self {
             selected_line: 3,
             palette_program: PaletteProgram::new(),
+            overlay: PaletteCanvasOverlay::new(),
             line_hovered: None,
             line_mouse_pressed_on: None,
         }
@@ -83,18 +90,23 @@ impl Component {
     }
 
     pub fn view(&self) -> Element<Envelope> {
+        use iced::widget::*;
+
         let dim = 256;
-        mouse_area(shader_element(&self.palette_program).width(dim).height(dim))
-            .on_press(Envelope(PrivateMessage::LeftButtonPressedInside))
-            .on_release(Envelope(PrivateMessage::LeftButtonReleasedInside))
-            .on_exit(Envelope(PrivateMessage::CursorExited))
-            .on_move(move |point| {
-                println!("point: {point:?}");
-                Envelope(PrivateMessage::CursorMovedOverLine(
-                    ((point.y / dim as f32) * PALETTE_ROWS as f32) as _,
-                ))
-            })
-            .into()
+        mouse_area(stack!(
+            shader_element(&self.palette_program).width(dim).height(dim),
+            canvas(&self.overlay).width(dim).height(dim)
+        ))
+        .on_press(Envelope(PrivateMessage::LeftButtonPressedInside))
+        .on_release(Envelope(PrivateMessage::LeftButtonReleasedInside))
+        .on_exit(Envelope(PrivateMessage::CursorExited))
+        .on_move(move |point| {
+            println!("point: {point:?}");
+            Envelope(PrivateMessage::CursorMovedOverLine(
+                ((point.y / dim as f32) * PALETTE_ROWS as f32) as _,
+            ))
+        })
+        .into()
     }
 }
 
@@ -301,5 +313,36 @@ impl PaletteShaderPipeline {
         pass.set_bind_group(0, &self.bind_group, &[]);
 
         pass.draw(0..4, 0..1);
+    }
+}
+
+struct PaletteCanvasOverlay {
+    pub canvas_cache: canvas::Cache,
+}
+impl PaletteCanvasOverlay {
+    pub fn new() -> Self {
+        Self {
+            canvas_cache: canvas::Cache::default(),
+        }
+    }
+}
+impl<Message> canvas::Program<Message> for PaletteCanvasOverlay {
+    type State = ();
+
+    fn draw(
+        &self,
+        _state: &Self::State,
+        renderer: &Renderer,
+        _theme: &iced::Theme,
+        bounds: Rectangle,
+        _cursor: iced::mouse::Cursor,
+    ) -> Vec<canvas::Geometry<Renderer>> {
+        vec![self.canvas_cache.draw(renderer, bounds.size(), |frame| {
+            frame.fill_rectangle(
+                Point::new(0., bounds.height / 2. - 0.75),
+                Size::new(bounds.width, bounds.height / 2. + 0.75),
+                Color::new(0.9, 0.9, 0.9, 0.4),
+            );
+        })]
     }
 }

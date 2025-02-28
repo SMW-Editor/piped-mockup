@@ -525,7 +525,6 @@ struct TilemapCanvasOverlay {
     pub tile_mouse_pressed_on: Option<TileCoords>,
     pub brush_tile: Option<TileCoords>,
 }
-
 impl TilemapCanvasOverlay {
     pub fn new() -> Self {
         Self {
@@ -539,7 +538,6 @@ impl TilemapCanvasOverlay {
         self.canvas_cache.clear();
     }
 }
-
 impl<Message> canvas::Program<Message> for TilemapCanvasOverlay {
     type State = ();
 
