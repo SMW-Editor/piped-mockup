@@ -4,6 +4,7 @@ use std::sync::RwLock;
 use glam::Vec2;
 
 use iced::widget::canvas;
+use iced::widget::canvas::Path;
 use iced::widget::stack;
 use iced::Color;
 use iced::Point;
@@ -325,6 +326,41 @@ impl PaletteCanvasOverlay {
             canvas_cache: canvas::Cache::default(),
         }
     }
+
+    fn get_hatched_path(top_left: Point, size: Size) -> Path {
+        let hatch_width = 8f32;
+        let hatch_count_horizontal = (size.width / hatch_width / 2.).ceil() as usize;
+        let hatch_count_vertical = (size.height / hatch_width / 2.).ceil() as usize;
+
+        let top = top_left.y;
+        let left = top_left.x;
+        let right = left + size.width;
+        let bottom = top + size.height;
+
+        Path::new(|b| {
+            for i in 0..hatch_count_horizontal {
+                let i = i as f32;
+                let hatch_start_x = left + i * 2. * hatch_width;
+                b.move_to(Point::new(hatch_start_x, top));
+                b.line_to(Point::new(hatch_start_x + hatch_width, top));
+                b.line_to(Point::new(
+                    hatch_start_x + size.height + hatch_width,
+                    bottom,
+                ));
+                b.line_to(Point::new(hatch_start_x + size.height, bottom));
+                b.close();
+            }
+            for i in 0..hatch_count_vertical {
+                let i = i as f32;
+                let hatch_start_y = top + (1. + i * 2.) * hatch_width;
+                b.move_to(Point::new(left, hatch_start_y));
+                b.line_to(Point::new(left, hatch_start_y + hatch_width));
+                b.line_to(Point::new(right, hatch_start_y + size.width + hatch_width));
+                b.line_to(Point::new(right, hatch_start_y + size.width));
+                b.close();
+            }
+        })
+    }
 }
 impl<Message> canvas::Program<Message> for PaletteCanvasOverlay {
     type State = ();
@@ -338,10 +374,12 @@ impl<Message> canvas::Program<Message> for PaletteCanvasOverlay {
         _cursor: iced::mouse::Cursor,
     ) -> Vec<canvas::Geometry<Renderer>> {
         vec![self.canvas_cache.draw(renderer, bounds.size(), |frame| {
-            frame.fill_rectangle(
-                Point::new(0., bounds.height / 2. - 0.75),
-                Size::new(bounds.width, bounds.height / 2. + 0.75),
-                Color::new(0.9, 0.9, 0.9, 0.4),
+            frame.fill(
+                &Self::get_hatched_path(
+                    Point::new(-2., bounds.height / 2. - 2.),
+                    Size::new(bounds.width + 2., bounds.height / 2. + 2.),
+                ),
+                Color::new(0.1, 0.1, 0.1, 1.0),
             );
         })]
     }
