@@ -47,7 +47,7 @@ enum PrivateMessage {
 
 pub struct Component {
     gfx_program: TilemapProgram,
-    overlay: CanvasOverlay,
+    overlay: TilemapCanvasOverlay,
 }
 impl Component {
     pub fn new(
@@ -60,7 +60,7 @@ impl Component {
                 tile_instances,
                 pipeline: Default::default(),
             },
-            overlay: CanvasOverlay::new(),
+            overlay: TilemapCanvasOverlay::new(),
         }
     }
 
@@ -519,14 +519,14 @@ fn create_instance_buffer(
     })
 }
 
-struct CanvasOverlay {
+struct TilemapCanvasOverlay {
     pub canvas_cache: canvas::Cache,
     pub tile_hovered: Option<TileCoords>,
     pub tile_mouse_pressed_on: Option<TileCoords>,
     pub brush_tile: Option<TileCoords>,
 }
 
-impl CanvasOverlay {
+impl TilemapCanvasOverlay {
     pub fn new() -> Self {
         Self {
             canvas_cache: canvas::Cache::default(),
@@ -540,7 +540,7 @@ impl CanvasOverlay {
     }
 }
 
-impl<Message> canvas::Program<Message> for CanvasOverlay {
+impl<Message> canvas::Program<Message> for TilemapCanvasOverlay {
     type State = ();
 
     fn draw(
