@@ -555,9 +555,9 @@ impl<Message> canvas::Program<Message> for TilemapCanvasOverlay {
                 let half_stroke_width = stroke_width / 2.;
                 frame.stroke_rectangle(
                     // Subtract 0.5 in order to get the canvas rectangle to more accurately position
-                    // itself over the pixels it's supposed to be surrounding, depending on the exact
-                    // layout position. This is required because the canvas allows subpixel positioning
-                    // with antialiasing.
+                    // itself over the pixels it's supposed to be surrounding, since the canvas can
+                    // shift relative to the shader element depending on final calculated layout
+                    // position.
                     Point::new(
                         tile_hovered.0 as f32 * 16. - half_stroke_width - 0.5,
                         tile_hovered.1 as f32 * 16. - half_stroke_width - 0.5,
@@ -578,9 +578,9 @@ impl<Message> canvas::Program<Message> for TilemapCanvasOverlay {
                 let half_stroke_width = stroke_width / 2.;
                 frame.stroke_rectangle(
                     // Subtract 0.5 in order to get the canvas rectangle to more accurately position
-                    // itself over the pixels it's supposed to be surrounding, depending on the exact
-                    // layout position. This is required because the canvas allows subpixel positioning
-                    // with antialiasing.
+                    // itself over the pixels it's supposed to be surrounding, since the canvas can
+                    // shift relative to the shader element depending on final calculated layout
+                    // position.
                     Point::new(
                         brush_tile.0 as f32 * 16. - half_stroke_width - 0.5,
                         brush_tile.1 as f32 * 16. - half_stroke_width - 0.5,

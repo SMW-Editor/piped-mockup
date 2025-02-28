@@ -375,6 +375,10 @@ impl<Message> canvas::Program<Message> for PaletteCanvasOverlay {
     ) -> Vec<canvas::Geometry<Renderer>> {
         vec![self.canvas_cache.draw(renderer, bounds.size(), |frame| {
             frame.fill(
+                // Subtract 2 in order to get the hatched paths to more accurately position
+                // themselves over the pixels they're supposed to be covering, since the canvas can
+                // shift relative to the shader element depending on final calculated layout
+                // position.
                 &Self::get_hatched_path(
                     Point::new(-2., bounds.height / 2. - 2.),
                     Size::new(bounds.width + 2., bounds.height / 2. + 2.),
